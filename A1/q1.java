@@ -81,7 +81,7 @@ public class q1 {
 				startPosX++;
 			}
 
-			// Wait for all threads ti be complete.
+			// Wait for all threads to be complete.
 			executor.shutdown();
 			while (!executor.isTerminated());
 
@@ -151,7 +151,11 @@ public class q1 {
 
 				// Put Alpha, R, G and B back together to form the output pixel value and store it in the output image.
 				int argb = ((0xff)<<24) | (redAcc<<16) | (greenAcc<<8) | (blueAcc);
-				outputimage.setRGB(x, y, argb);
+
+				// Synchronize the outputimage as writes could potentially overlap eachother.
+				synchronized(outputimage){
+					outputimage.setRGB(x, y, argb);
+				}
 
 				// Get the threads next tasked position.
 				computePosition = nextPosition();
