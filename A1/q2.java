@@ -5,7 +5,7 @@ class q2{
 
   public static void main(String[] args){
 
-		// Initialize the list to have nodes A, B and C, such that A is the head and C is the tail.
+	  // Initialize the list to have nodes A, B and C, such that A is the head and C is the tail.
 	  list = new CircularLinkedList();
 	  list.head = new Node('A');
 	  list.head.next = new Node('B');
@@ -13,22 +13,22 @@ class q2{
 	  list.tail = list.head.next.next;
 	  list.tail.next = list.head;
 
-		// Create the task threads: PrintNodes, AddNodes and RemoveNodes.
+	  // Create the task threads: PrintNodes, AddNodes and RemoveNodes.
 	  Thread thread0 = new Thread(new PrintNodes());
 	  Thread thread1 = new Thread(new AddNodes());
 	  Thread thread2 = new Thread(new RemoveNodes());
 
-		// Start each thread;
+	  // Start each thread;
 	  thread0.start();
 	  thread1.start();
 	  thread2.start();
 
-		// Let the three threads run for five seconds.
+	  // Let the three threads run for five seconds.
 	  long startTime = System.currentTimeMillis();
 	  while(System.currentTimeMillis()-startTime < 5000);
 	  finish = true;
 
-		// Print out the final list.
+	  // Print out the final list.
 	  int i = -1;
 	  Node curNode = list.head;
 	  System.out.println("\nFinal List:");
@@ -39,7 +39,7 @@ class q2{
 	  }
   }
 
-	/**
+  /**
 	* Thread class that will run through the list and print each node it visits.
 	*/
   static class PrintNodes implements Runnable{
@@ -58,7 +58,7 @@ class q2{
 	}
   }
 
-	/**
+  /**
 	* Thread class that will run through the list and add a node with a 1/10 chance.
 	*/
   static class AddNodes implements Runnable{
@@ -70,12 +70,12 @@ class q2{
 				// Add a node to the list with a 1/10 chance.
 				if(Math.random() <= 0.1){
 
-						// Create a new node with the next character in line and hold the current nodes next neighbour.
-						Node n = new Node(c);
-				    Node temp = curNode.next;
+					// Create a new node with the next character in line and hold the current nodes next neighbour.
+					Node n = new Node(c);
+					Node temp = curNode.next;
 
-						// Set the current nodes next neighbour to the new Node, and make the new node point to the current
-						// nodes old neighbour.
+					// Set the current nodes next neighbour to the new Node, and make the new node point to the current
+					// nodes old neighbour.
 				    curNode.next = n;
 				    n.next = temp;
 				    c++;
@@ -94,7 +94,7 @@ class q2{
 
   }
 
-	/**
+  /**
 	* Thread class that will run through the list and delete a node with a 1/10 chance.
 	*/
   static class RemoveNodes implements Runnable{
@@ -124,15 +124,18 @@ class q2{
   }
 
 
-	/**
+  /**
 	* Circularly Linked List class implementation that maintains pointers to the list's head and tail.
+	* In this implementation however, these are just constructs for initialization and to begin
+	* traversal on the list - these will not be updated as items get added/deleted, and hold a pointer
+	* to the beginning of the list (head) for printing the final list at the end of the run.
 	*/
   static class CircularLinkedList{
-    volatile Node head;
-    volatile Node tail;
+    Node head;
+    Node tail;
   }
 
-	/**
+  /**
 	* Node class that holds a character c and a next Node pointer.
 	*/
   static class Node {
