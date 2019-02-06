@@ -1,6 +1,3 @@
-
-import static java.lang.Thread.sleep;
-
 import java.util.Random;
 
 public class q3 {
@@ -18,23 +15,22 @@ public class q3 {
 
                 @Override
                 public void run() {
-                    //Must be put inside a try catch block to use sleep method.
-                    try {
 
-                        //We start list traversal.
-                        Node current = list.getHead();
+                    //We start list traversal.
+                    Node current = list.getHead();
 
-                        //While execution time did not last 5 seconds, we print, sleep, get next node and repeat.
-                        while (System.currentTimeMillis() < (startTime + 5000)) {
+                    //While execution time did not last 5 seconds, we print, sleep, get next node and repeat.
+                    while (System.currentTimeMillis() < (startTime + 5000)) {
 
-                            System.out.print(current.getData() + " ");
-                            sleep(100);
-                            current = current.getNext();
+                        System.out.print(current.getData() + " ");
+
+                        //InterruptedException needs to be caught during sleep operation.
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e) {
+                                e.printStackTrace();
                         }
-                    } catch (Exception e) {
-                        System.out.println("ERROR " + e);
-                        e.printStackTrace();
-
+                        current = current.getNext();
                     }
                 }
 
@@ -45,44 +41,37 @@ public class q3 {
                 @Override
                 public void run() {
 
-                    try {
-
-                        //Keep track of previous node. We will start scanning the list from the second element.
-                        Node previous = list.getHead();
-                        Node current = previous.getNext();
+                    //Keep track of previous node. We will start scanning the list from the second element.
+                    Node previous = list.getHead();
+                    Node current = previous.getNext();
 
 
-                        Random rand = new Random();
+                    Random rand = new Random();
 
 
-                        while (System.currentTimeMillis() < (startTime + 5000)) {
+                    while (System.currentTimeMillis() < (startTime + 5000)) {
 
-                            //Gets a number between 1 and 10.
-                            int probability = rand.nextInt(9) + 1;
+                        //Gets a number between 1 and 10.
+                        int probability = rand.nextInt(10) + 1;
 
-                            //If we get our probability is 1 in 10.
-                            if (probability == 1) {
+                        //If we get our probability is 1 in 10.
+                        if (probability == 1) {
 
-                                //Only delete if it's not A, B, or C and sleep 20 ms.
-                                if (current.getData() != 'A' && current.getData() != 'B' && current.getData() != 'C') {
-                                    list.deleteNode(previous, current);
-                                    System.out.println("Deleted :" + current.getData() + " ");
-                                    sleep(20);
+                            //Only delete if it's not A, B, or C and sleep 20 ms.
+                            if (current.getData() != 'A' && current.getData() != 'B' && current.getData() != 'C') {
+                                list.deleteNode(previous, current);
+                                try {
+                                    Thread.sleep(20);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
                                 }
-
                             }
-                            //Advance the pointers.
-                            current = previous.getNext();
-                            previous = previous.getNext();
-
 
                         }
-
-                    } catch (Exception e) {
-                        System.out.println("ERROR " + e);
-                        e.printStackTrace();
+                        //Advance the pointers.
+                        previous = previous.getNext();
+                        current = previous.getNext();
                     }
-
                 }
             };
 
@@ -91,7 +80,7 @@ public class q3 {
 
                 @Override
                 public void run() {
-                    try {
+
 
                         //Create Random object.
                         Random rand = new Random();
@@ -102,53 +91,53 @@ public class q3 {
                         //While there is still time for execution.
                         while (System.currentTimeMillis() < (startTime + 5000)) {
 
+
                             //Get number between 1 and 10.
-                            int probability = rand.nextInt(9) + 1;
+                            int probability = rand.nextInt(10) + 1;
 
                             //If we hit our probability, generate random visible character.
                             if (probability == 1) {
                                 // 33 is ascii for first visible character and 126 is the last visible ascii.
                                 int character = rand.nextInt(126 - 33) + 33;
-
                                 //Keep generating new letter if we get 'A', 'B', or 'C'.
                                 while (character == 65 || character == 66 || character == 67) {
-                                    character = rand.nextInt(122 - 33) + 33;
+                                    character = rand.nextInt(126 - 33) + 33;
                                 }
-
                                 //Cast to char and insert.
                                 char toInsert = (char) character;
                                 list.insertNode(current, toInsert);
-                                System.out.println("Inserted " + toInsert);
-                                sleep(20);
+
+                                //Put to sleep.
+                                try {
+                                    Thread.sleep(20);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                                //Get the next element.
                                 current = current.getNext();
                             }
-
                         }
-                    } catch (Exception e) {
-                        System.out.println("ERROR " + e);
-                        e.printStackTrace();
-                    }
                 }
             };
 
-        Thread[] allThreads = new Thread[3];
+            Thread[] allThreads = new Thread[3];
 
-        allThreads[0] = new Thread(printTask);
-        allThreads[1] = new Thread(removeTask);
-        allThreads[2] = new Thread(insertTask);
+            allThreads[0] = new Thread(printTask);
+            allThreads[1] = new Thread(removeTask);
+            allThreads[2] = new Thread(insertTask);
 
-        startTime = System.currentTimeMillis();
+            startTime = System.currentTimeMillis();
 
-        //Start all threads.
-        for (int i = 0; i < allThreads.length; i++) {
-            allThreads[i].start();
-        }
-        //Join them before continuing main.
-        for (int i = 0; i < allThreads.length; i++) {
-            allThreads[i].join();
-        }
-        System.out.println("Done");
-        list.printList();
+            //Start all threads.
+            for (int i = 0; i < allThreads.length; i++) {
+                allThreads[i].start();
+            }
+            //Join them before continuing main.
+            for (int i = 0; i < allThreads.length; i++) {
+                allThreads[i].join();
+            }
+            System.out.println("Done");
+            list.printList();
 
 
         } catch (Exception e) {
@@ -199,11 +188,13 @@ public class q3 {
             c.setNext(a);
 
             this.head = a;
+
         }
 
         public Node getHead() {
             return this.head;
         }
+
 
 
         public void insertNode(Node current, char data) {
@@ -220,13 +211,13 @@ public class q3 {
         //Method to print the list.
         public void printList() {
             Node curr = this.getHead();
+            System.out.print("List : ");
             System.out.print(curr.getData() + " ");
             curr = curr.getNext();
             while(curr != this.head) {
                 System.out.print((curr.data) + " ");
                 curr = curr.getNext();
             }
-            System.out.print(curr.getData());
         }
     }
 
