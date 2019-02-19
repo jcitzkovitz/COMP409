@@ -61,7 +61,7 @@ public class q1 {
 	//Method to place the initial pieces on the board and put each piece in the thread array.
 	private static void placeInitialPieces(int numberOfPieces) {
         Piece piece;
-        //Initiliaze data structure for threads.
+        //Initialize data structure for threads.
         allThreads = new Thread[numberOfPieces];
         for (int i = 0; i < numberOfPieces; i++) {
             double probability = Math.random();
@@ -195,18 +195,10 @@ public class q1 {
             int[] result = new int[2];
 
             //Knight has a maximum of 8 moves at all times.
-            ArrayList<int[]> legalMoves = new ArrayList<>();
             int[][]  allMoves = {{-2,1}, {-1,2}, {1,2}, {2,1}, {2, -1}, {1, -2}, {-1,-2}, {-2, -1}};
 
             //Store only moves within legal bounds in the ArrayList legalMoves.
-            for (int i = 0; i<allMoves.length; i++) {
-                int nextX = curX + allMoves[i][0];
-                int nextY = curY + allMoves[i][1];
-
-                if(nextX < 8 && nextX > -1  && nextY < 8 && nextY > -1) {
-                    legalMoves.add(new int[]{nextX, nextY});
-                }
-            }
+            ArrayList<int[]> legalMoves = filterOutOfBounds(curX, curY, allMoves);
 
             //Get the next move randomly.
             Random rand = new Random();
@@ -217,9 +209,45 @@ public class q1 {
             return result;
         }
 
-        public int[] getQueenMove(int curX, int curY) {
-            int[] result = new int[2];
+        //Returns the target space and the direction in which the Queen is going.
+        public int[][] getQueenMove(int curX, int curY) {
+            int[][] result = new int[2][2];
+            Random rand = new Random();
+            int[][] allDirections = {{1,0},{1,1},{0,1},{-1,-1},{-1,0},{-1,-1},{0,-1},{1,-1}};
+            ArrayList<int[]> legalDirections = filterOutOfBounds(curX, curY, allDirections);
+
+            //Pick a random direction.
+            int index = rand.nextInt(legalDirections.size());
+            int[] direction = legalDirections.get(index);
+            result[1] = direction;
+            int steps = rand.nextInt(7) + 1;
+            int nextX = direction[0] * steps;
+            int nextY = direction[1] * steps;
+
+            //Generate new step number until we get a location that is on the board.
+            while (!(nextX < 8 && nextX > -1 && nextY < 8 && nextY < -1)) {
+                steps = rand.nextInt(7) + 1;
+                nextX = direction[0] * steps;
+                nextY = direction[1] * steps;
+            }
+            result[0][0] = nextX;
+            result[0][1] = nextY;
+
             return result;
+        }
+
+        //Function that filters out all out of bounds moves from random move options.
+        public static ArrayList<int[]> filterOutOfBounds(int x, int y, int[][] moves) {
+            ArrayList<int[]> results = new ArrayList<>();
+            for (int i = 0; i<moves.length; i++) {
+                int nextX = x + moves[i][0];
+                int nextY = y + moves[i][1];
+
+                if(nextX < 8 && nextX > -1  && nextY < 8 && nextY > -1) {
+                    results.add(new int[]{nextX, nextY});
+                }
+            }
+            return results;
         }
 
         public boolean move() {
@@ -233,10 +261,8 @@ public class q1 {
                 int targetY = nextPosition[1];
                 boolean status = board.tiles[targetX][targetY].goTo();
                 if (status) {
-                    //System.out.println("I am Piece " + getId() + " and I am at " + currentX + " and " + currentY);
                     this.setCurrentPosition(board.tiles[targetX][targetY]);
                     board.tiles[currentX][currentY].leave();
-                    //System.out.println("I am Piece " + getId() + " and I moved to " + targetX + " and " + targetY);
                     incNumMoves();
                     result = true;
                 }
@@ -246,8 +272,17 @@ public class q1 {
             }
             //Queen scenario.
             else {
+                int currentX = this.getCurrentPosition().getX();
+                int currentY = this.getCurrentPosition().getY();
+                int[][] nextPosition = getQueenMove(currentX, currentY);
+                int targetX = nextPosition[0][0];
+                int targetY = nextPosition[0][1];
+                int[] direction = nextPosition[1];
+               // while (currentX != targetX && currentY != targetY) {
 
-            }
+                }
+
+                
             return result;
         }
 
