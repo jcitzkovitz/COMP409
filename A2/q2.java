@@ -1,5 +1,8 @@
 package A2;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.ArrayList;
 
 class Point {
@@ -24,6 +27,13 @@ class Point {
     public String toString() {
         return "("+x+","+y+")";
     }
+
+    public double getAngle(Point p, Point q){
+        double uLen = Math.sqrt(Math.pow(p.x-this.x,2) + Math.pow(p.y-this.y, 2));
+        double vLen = Math.sqrt(Math.pow(q.x-this.x,2) + Math.pow(q.y-this.y, 2));
+        double dotProduct = (p.x-this.x)*(q.x-this.x) + (p.y-this.y)*(q.y-this.y);
+        return Math.acos(dotProduct/(uLen*vLen));
+      }
 }
 
 class PointPair {
@@ -40,10 +50,10 @@ class PointPair {
 	}
 }
 
-class Edge {
+class Edge extends Semaphore{
     Point p,q;
 
-    public Edge(Point p1,Point p2) { p=p1; q=p2; }
+    public Edge(Point p1,Point p2) { super(1); p=p1; q=p2; }
     // Utility routine -- 2d cross-product (signed area of a triangle) test for orientation.
     public int sat(double p0x,double p0y,double p1x,double p1y,double p2x,double p2y) {
         double d = (p1x-p0x)*(p2y-p0y)-(p2x-p0x)*(p1y-p0y);
@@ -70,15 +80,21 @@ class Edge {
     public boolean equals(Edge f){
     	return this.p.same(f.p) && this.q.same(f.q);
     }
+
+    public Point getOppositePoint(Point p){
+    	return this.p.same(p) ? this.q : this.p;
+    }
 }
 
 
 public class q2 {
 
     public static int n,t; // constants
-    public static volatile Integer flipCount = 0;
+    public static volatile int flipCount = 0;
     public static Point[] points;
     public static volatile ArrayList<Edge> edges = new ArrayList<Edge>();
+    public static Semaphore removeLock = new Semaphore(1);
+    public static ArrayList<Edge> removedEdges = new ArrayList<Edge>();
 
     // Returns true if any existing edge intersects this one
     public static boolean intersection(Edge f) {
@@ -93,8 +109,8 @@ public class q2 {
     // Returns true if the number of edges this edge crosses is less equal to 1
     public static boolean isCandidatePair(Edge f) {
     	int count = 0;
-        for (Edge e : edges) {
-            if (f.intersects(e)) {
+        for (int i = 0; i < edges.size(); i++) {
+            if (f.intersects(edges.get(i))) {
                 count++;
                 if(count > 1)
                 	return false;
@@ -107,39 +123,8 @@ public class q2 {
         	return true;
     }
 
-    private static double getAngle(Point p, Point q, Point m){
-      double uLen = Math.sqrt(Math.pow(p.x-m.x,2) + Math.pow(p.y-m.y, 2));
-      double vLen = Math.sqrt(Math.pow(q.x-m.x,2) + Math.pow(q.y-m.y, 2));
-      double dotProduct = (p.x-m.x)*(q.x-m.x) + (p.y-m.y)*(q.y-m.y);
-      return Math.acos(dotProduct/(uLen*vLen));
-    }
-
-    private static Point getOppositePoint(Edge e, Point p){
-    	return e.p.same(p) ? e.q : e.p;
-    }
-
-    private static ArrayList<PointPair> getFlipCandidates(Edge e){
-    	ArrayList<PointPair> candidates = new ArrayList<PointPair>();
-    	ArrayList<Point> connectingPoints = new ArrayList<Point>();
-    	for(Edge pe : e.p.edges){
-    		for(Edge qe : e.q.edges){
-    			if(!qe.equals(pe)){
-    				Point pePoint = getOppositePoint(pe,e.p);
-    				Point qePoint = getOppositePoint(qe,e.q);
-    				if(pePoint.same(qePoint))
-    					connectingPoints.add(pePoint);
-    			}
-    		}
-    	}
-    	for(int i = 0; i < connectingPoints.size(); i++){
-    		for(int j = i+1; j < connectingPoints.size(); j++){
-    			PointPair pair = new PointPair(connectingPoints.get(i),connectingPoints.get(j));
-    			Edge f = new Edge(pair.p1,pair.p2);
-    			if(isCandidatePair(f) && f.intersects(e))
-    				candidates.add(pair);
-    		}
-    	}
-    	return candidates;
+    public static synchronized void updateCount(){
+    	flipCount++;
     }
 
     public static void main(String[] args) {
@@ -196,34 +181,15 @@ public class q2 {
             System.out.println(edges.toString());
 
             // Now your code is required!
-            boolean flips = false;
-            int round = 0;
-            do{
-            	System.out.println("-------Round "+round+"------");
-            	for(int i = 0; i < edges.size(); i++){
-            		flips = false;
-            		Edge e = edges.get(i);
-            		System.out.println("EDGE: "+e.toString());
-                    for(PointPair pair : getFlipCandidates(e)){
-                    	System.out.println("Candidate: "+pair.toString());
-                    	double angle1 = getAngle(e.p,e.q,pair.p1);
-                    	double angle2 = getAngle(e.p,e.q,pair.p2);
-                    	if(angle1+angle2 > Math.PI){
-                    		edges.remove(e);
-                    		Edge newEdge = new Edge(pair.p1,pair.p2);
-                    		edges.add(newEdge);
-                    		pair.p1.edges.remove(e);
-                    		pair.p2.edges.remove(e);
-                    		pair.p1.edges.add(newEdge);
-                    		pair.p2.edges.add(newEdge);
-                    		flips = true;
-                    		System.out.println("Flipped: "+newEdge.toString());
-                    		flipCount++;
-                    	}
-                    }
-                }
-            	round++;
-            } while(flips);
+            ExecutorService executor = Executors.newFixedThreadPool(t);
+
+            // Execute the piece threads.
+ 			for(int i = 0; i < t; i++){
+ 				executor.execute(new Delaunay(i));
+ 			}
+
+ 			executor.shutdown();
+ 			while (!executor.isTerminated());
 
             System.out.println("Flips: "+flipCount);
 
@@ -233,10 +199,98 @@ public class q2 {
         }
     }
 
-    class Delaunay implements Runnable{
-    	ArrayList<Integer> checkEdges;
-    	public void run(){
+    static class Delaunay implements Runnable{
 
+    	int id;
+
+    	public Delaunay(int id){
+    		this.id = id;
+    	}
+
+    	 private ArrayList<PointPair> getFlipCandidates(Edge e){
+    	    	ArrayList<PointPair> candidates = new ArrayList<PointPair>();
+    	    	ArrayList<Point> connectingPoints = new ArrayList<Point>();
+    	    	for(int i = 0; i < e.p.edges.size(); i++){
+    	    		Edge pe = e.p.edges.get(i);
+    	    			for(int j = 0; j < e.q.edges.size(); j++){
+    	        			Edge qe = e.q.edges.get(j);
+	        				if(!qe.equals(pe)){
+	            				Point pePoint = pe.getOppositePoint(e.p);
+	            				Point qePoint = qe.getOppositePoint(e.q);
+	            				if(pePoint.same(qePoint))
+	            					connectingPoints.add(pePoint);
+	            			}
+    	    		}
+    	    	}
+
+    	    	for(int i = 0; i < connectingPoints.size(); i++){
+    	    		for(int j = i+1; j < connectingPoints.size(); j++){
+    	    			PointPair pair = new PointPair(connectingPoints.get(i),connectingPoints.get(j));
+    	    			Edge f = new Edge(pair.p1,pair.p2);
+    	    			if(isCandidatePair(f) && f.intersects(e))
+    	    				candidates.add(pair);
+    	    		}
+    	    	}
+    	    	return candidates;
+    	}
+
+    	private boolean isFlipable(Edge e, PointPair pair){
+    		Edge test1 = new Edge(e.p,pair.p1);
+    		Edge test2 = new Edge(e.q,pair.p1);
+    		Edge test3 = new Edge(e.p,pair.p2);
+    		Edge test4 = new Edge(e.q, pair.p2);
+
+    		for(int i = 0; i < removedEdges.size(); i++){
+    			Edge r = removedEdges.get(i);
+    			if(r.equals(test1) || r.equals(test2) || r.equals(test3) || r.equals(test4))
+    				return false;
+    		}
+    		return true;
+    	}
+
+        private void flipEdge(Edge remEdge, PointPair addPair){
+        	removedEdges.add(remEdge);
+			edges.remove(remEdge);
+    		Edge newEdge = new Edge(addPair.p1,addPair.p2);
+    		edges.add(newEdge);
+    		addPair.p1.edges.remove(remEdge);
+    		addPair.p2.edges.remove(remEdge);
+    		addPair.p1.edges.add(newEdge);
+    		addPair.p2.edges.add(newEdge);
+    		System.out.println("Flipped: "+newEdge.toString());
+    		updateCount();
+        }
+
+
+    	public void run(){
+    		boolean flips = false;
+            do{
+            	flips = false;
+            	for(int i = 0; i < edges.size(); i++){
+            		Edge e = edges.get(i);
+            		if(e.tryAcquire()){
+            			System.out.println("Thread "+this.id+" got edge "+e.toString());
+            			ArrayList<PointPair> candidates = getFlipCandidates(e);
+        				for(int j = 0; j < candidates.size(); j++){
+            				PointPair pair = candidates.get(j);
+                        	double angle1 = pair.p1.getAngle(e.p,e.q);
+                        	double angle2 = pair.p2.getAngle(e.p,e.q);
+                        	if(angle1+angle2 > Math.PI){
+                        		synchronized(removeLock){
+                        			if(isFlipable(e,pair)){
+                        				flipEdge(e,pair);
+                        				flips = true;
+                        			}else{
+                        				continue;
+                        			}
+                        		}
+                        	}
+                        }
+        				e.release();
+            		}else
+            			continue;
+                }
+            } while(flips);
     	}
     }
 }
