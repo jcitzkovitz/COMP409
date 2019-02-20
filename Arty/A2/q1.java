@@ -305,8 +305,8 @@ public class q1 {
         //This method returns true if the piece succesfully did a random legal move, and false otherwise.
         public boolean move() {
 
-            
-            //get curernt piece location.
+
+            //get current piece location.
             int currentX = this.getCurrentPosition().getX();
             int currentY = this.getCurrentPosition().getY();
 
@@ -408,21 +408,24 @@ public class q1 {
                 }
 
             }
-            //Return faslse by default
+            //Return false by default
             return false;
         }
 
 
         @Override
         public void run() {
+            //While there is time to execute, try to move this piece.
             while (System.currentTimeMillis() < startTime + (simLength * 1000)) {
                 while (!move()) {
+                    //If we have entered this thread but have failed to move the piece, check timer again.
+                    //This prevents threads from looping forever after thread entered but started executing.
                     if (System.currentTimeMillis() > startTime + (simLength * 1000)) {
                         return;
                     }
                 }
 
-                //Generate random int between 10 and 30.
+                //Generate random int between 10 and 30 and sleep.
                 Random rand = new Random();
                 int sleepProb =  rand.nextInt(20) + 10;
                 try {
