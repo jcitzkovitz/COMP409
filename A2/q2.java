@@ -354,7 +354,6 @@ public class q2 {
                         			// Otherwise, move onto the next edge.
                         			if(isStillFlippable(e,pair)){
                         				flipEdge(e,pair);
-                        				System.out.println(pair);
                         			}
                         			flips = true;
                         			breakOutterLoop = true;
