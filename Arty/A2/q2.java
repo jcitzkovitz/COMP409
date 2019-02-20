@@ -6,7 +6,9 @@ class Point {
     
     // Set of edges attached to this point
     public ArrayList<Edge> edges;
-    
+
+    private boolean isLocked;
+
     public Point(double bx,double by) { x = bx; y = by; }
 
     // Returns true if the given point is the same as this one.
@@ -19,11 +21,46 @@ class Point {
         if (!edges.contains(e))
             edges.add(e);
     }
-    
-    public String toString() {
-        return "("+x+","+y+")";
+
+
+    public synchronized boolean isUnlocked(){
+        if (isLocked){
+            return false;
+        }
+        else {
+            isLocked= true;
+            return true;
+        }
     }
+
+    public synchronized void unlock() {
+        isLocked = false;
+        //Send a signal to all threads that they can now acquire this edge.
+        notifyAll();
+    }
+
+    public synchronized void waitPoint() throws InterruptedException {
+        //While the point is locked, we wait.
+        while (isLocked) {
+            wait();;
+        }
+    }
+
+    public synchronized ArrayList<Edge> getPointEdges() {
+
+        ArrayList<Edge> edgeHolder = new ArrayList<>();
+        for (Edge e: edges) {
+            edgeHolder.add(e);
+        }
+        return edgeHolder;
+    }
+
+
+    
+
 }
+
+
 
 class Edge {
     Point p,q;
@@ -47,19 +84,47 @@ class Edge {
         if (s1==s2 || (s1==0 && s2!=0) || (s2==0 && s1!=0)) return false;
         return true;
     }
+
+    public synchronized void lockEdge() throws InterruptedException {
+        boolean pIsUnlocked = p.isUnlocked();
+        boolean qIsUnlocked = q.isUnlocked();
+
+        //While both are locked, we release one and wait for the other.
+        while (!(pIsUnlocked && qIsUnlocked)) {
+
+            if (p.isUnlocked()) {
+                //p.isUnlocked locks the point. We release it while we don't have q.
+                p.unlock();
+                q.waitPoint();
+            }
+
+            else if (q.isUnlocked()) {
+                q.unlock();
+                p.waitPoint();
+            }
+            else {
+                p.waitPoint();
+                q.waitPoint();
+            }
+        }
+    }
     
     public String toString() {
         return "<"+p+","+q+">";
     }
+
+
+
 }
 
 
 public class q2 {
 
+
     public static int n,t; // constants
     public static Point[] points; 
     public static ArrayList<Edge> edges = new ArrayList<Edge>();
-
+    public static int sumFlips;
     // Returns true if any existing edge intersects this one
     public static boolean intersection(Edge f) {
         for (Edge e : edges) {
@@ -69,6 +134,12 @@ public class q2 {
         }
         return false;
     }
+
+    public synchronized  void incTotalFlips() {
+        sumFlips++;
+    }
+
+
         
     public static void main(String[] args) {
         try {
@@ -123,13 +194,117 @@ public class q2 {
             System.out.println("Triangulated: "+n+" points, "+edges.size()+" edges");
 
             // Now your code is required!
+            sumFlips = 0;
 
-            
+
+
 
 
         } catch (Exception e) {
             System.out.println("ERROR " +e);
             e.printStackTrace();
+        }
+
+
+    }
+
+    static class delaunayTriangle implements Runnable {
+
+        //Returns Area of triangle formed by this, p, and q.
+        public double getArea(Point a, Point b, Point c) {
+            double area = Math.abs(((a.x * (b.y - c.y)) + (b.x * (c.y - a.y)) +  (c.x * (a.y - b.y))) / 2);
+            return area;
+        }
+
+        @Override
+        public void run() {
+
+            //Pick a random edge to begin with.
+            Random random = new Random();
+            int index = random.nextInt(edges.size());
+            ArrayList<Edge> edgesToCheck = new ArrayList<Edge>();
+            Edge startEdge = edges.get(index);
+            edgesToCheck.add(startEdge);
+
+            //Loop all edges in order, stop when we come back to start edge.
+            for (int i = (index + 1) % edges.size(); i != index; i = (i + 1) % edges.size()) {
+                edgesToCheck.add(edges.get(i));
+            }
+
+            //Initialize counter.
+            int flipCount = 0;
+
+            //Loop until termination: all edges have been viewed without having been modified.
+            boolean hasConverged = false;
+
+            while(!hasConverged) {
+                hasConverged = true;
+                for (Edge e : edgesToCheck) {
+
+                    try {
+                        e.lockEdge();
+                    } catch (InterruptedException e1) {
+                        e1.printStackTrace();
+                    }
+
+                    Point uPoint = e.p;
+                    Point vPoint = e.q;
+                    Point adjacentPointU = null;
+                    Point adjacentPointV= null;
+
+                    ArrayList<Edge> uPointEdges = uPoint.getPointEdges();
+
+                    for (Edge edge : uPointEdges) {
+                        //Get the point the opposite point of u forming edge.
+                        Point potential;
+
+                        if (uPoint.same(edge.p)) {
+                            potential = edge.q;
+
+                        }
+                        else {
+                            potential = edge.p;
+                        }
+
+                        boolean isTriangle = false;
+                        //Get all edges from potential point and find out if it's connected to v.
+                        ArrayList<Edge> potentialEdges = potential.getPointEdges();
+                        for (Edge edge1 : potentialEdges) {
+                            Point u1 = edge1.p;
+                            Point v1 = edge1.q;
+                            if(vPoint.same(u1) || vPoint.same(v1)) {
+                                isTriangle = true;
+                                break;
+                            }
+                        }
+
+                        if (isTriangle) {
+
+                            //Determine size of potential point.
+                            int side = e.sat(uPoint.x, uPoint.y, vPoint.x, vPoint.y, potential.x, potential.y);
+                            if (side < 0) {
+                                //If no other points were found
+                                if(adjacentPointU == null) {
+                                    adjacentPointU = potential;
+                                }
+                                //If another point was found, keep the one with the smaller area.
+                                else {
+                                    double areaPrevious = getArea(uPoint, vPoint, adjacentPointU);
+                                    double areaNew = getArea(uPoint, vPoint, adjacentPointV);
+                                    if (areaNew < areaPrevious) {
+                                        adjacentPointV = potential;
+                                    }
+                                }
+                            }
+                        }
+
+                        
+
+                    }
+
+
+                }
+            }
         }
     }
 }
