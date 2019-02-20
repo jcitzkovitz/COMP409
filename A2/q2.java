@@ -280,7 +280,7 @@ public class q2 {
     	 * @param Edge e is the edge to be examined.
     	 * @param PointPair p is the pair of points to be examined.
     	 * */
-    	private boolean isStillFlippable(Edge e, PointPair pair){
+    	private boolean isStillFlipable(Edge e, PointPair pair){
     		Edge test1 = new Edge(e.p,pair.p1);
     		Edge test2 = new Edge(e.q,pair.p1);
     		Edge test3 = new Edge(e.p,pair.p2);
@@ -350,10 +350,10 @@ public class q2 {
                         		// Obtain the flipLock
                         		synchronized(flipLock){
 
-                        			// If the edge is still flippable (ie a connecting edge to e still exists) then flip it.
+                        			// If the edge is still Flipable (ie a connecting edge to e still exists) then flip it.
                         			// After flipping it, go back to the beggining of the edge list and begin rexamining the graph.
                         			// Otherwise, move onto the next edge.
-                        			if(isStillFlippable(e,pair)){
+                        			if(isStillFlipable(e,pair)){
                         				flipEdge(e,pair);
                         				flips = true;
                         				breakOutterLoop = true;
