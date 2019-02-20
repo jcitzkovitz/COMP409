@@ -329,8 +329,10 @@ public class q2 {
             do{
             	flips = false;
             	for(int i = 0; i < edges.size(); i++){
-            		boolean breakOutterLoop = false;
-            		Edge e = edges.get(i);
+            		Edge e ;
+            		synchronized(edges){
+            			e = edges.get(i);
+            		}
 
             		// Attempt to acquire the lock on e. If not, move onto the next edge.
             		if(e.tryAcquire()){
@@ -356,16 +358,16 @@ public class q2 {
                         				flipEdge(e,pair);
                         			}
                         			flips = true;
-                        			breakOutterLoop = true;
+                        			break;
                         		}
                         	}
                         }
 
         				// Release the lock on e
         				e.release();
-            		}else if(breakOutterLoop)
-            			break;
-                	}
+            		}
+
+                }
             } while(flips);
     	}
     }
