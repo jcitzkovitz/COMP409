@@ -1,9 +1,7 @@
 package A2;
 
-import java.util.Stack;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class q1 {
@@ -22,8 +20,8 @@ public class q1 {
 	static volatile boolean printReady;
 	static volatile Integer numPrintReady;
 	static volatile int numStartReady;
-	static ReentrantLock printLock;
 	static ReentrantLock printReadyLock;
+	static ReentrantLock printLock;
 	static ReentrantLock startLock;
 
 	public static void main(String[] args){
@@ -44,11 +42,11 @@ public class q1 {
 			// Set the board, pieces and locks
 			board = new ReentrantLock[BOARD_SIZE][BOARD_SIZE];
 			pieces = new ChessPiece[numPieces];
-			printLock = new ReentrantLock();
-			printReadyLock = new ReentrantLock();
 			numPrintReady = 0;
 			moveCount = 0;
+			printLock = new ReentrantLock();
 			startLock = new ReentrantLock();
+			printReadyLock = new ReentrantLock();
 
 			int pieceCount = 0;
 
@@ -105,6 +103,7 @@ public class q1 {
 		return moveCount;
 	}
 
+
 	/**
 	 * Print the board layout - for testing purposes
 	 * */
@@ -127,27 +126,24 @@ public class q1 {
 		public void run(){
 			while(run){
 
-				synchronized(moveCount){
-					System.out.println("Moves made at current stage: "+getMoveCount());
+				// Set intention to print for Piece threads to see, and wait to be notified when they are all ready.
+				synchronized(printReadyLock){
+					printReady = true;
+					try {
+						printReadyLock.wait();
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
 				}
-//				// Set the the threads intention to print, and wait for all threads to tell this thread that they've paused execution.
-//				synchronized(printReadyLock){
-//					try {
-//						printReady = true;
-//						System.out.println("Waiting on printReadyLock...");
-//						printReadyLock.wait();
-//						System.out.println("May continue!");
-//					} catch (InterruptedException e) {
-//						e.printStackTrace();
-//					}
-//				}
-//
-//				// Obtain the printLock, print, and then notify all threads that they may continue execution.
-//				synchronized(printLock){
-//					System.out.println("Moves made at current stage: "+getMoveCount());
-//					printReady = false;
-//					printLock.notifyAll();
-//				}
+
+				// Obtain the print lock, which ensures that all other threads are waiting on it, and print.
+				synchronized(printLock){
+					printReady = false;
+					System.out.println("Moves at this point: "+getMoveCount());
+					printLock.notifyAll();
+				}
+
 
 				// Sleep this thread for 1 second.
 				try {
@@ -165,6 +161,7 @@ public class q1 {
 	 * Each chess piece itself is a lock to be placed on the board of empty locks.
 	 * */
 	static abstract class ChessPiece implements Runnable{
+
 		// X and y position of the piece on the board
 		protected volatile int x;
 		protected volatile int y;
@@ -191,7 +188,12 @@ public class q1 {
 		 * Waits for all boards to lock their initial spots for beggining execution.
 		 * */
 		protected void startReady(){
+
+			// Lock the initial starting space.
 			board[this.y][this.x].lock();
+
+			// Obtain the start and update the readyStart count. When the last thread comes here,
+			// notify all threads that they can begin execution.
 			synchronized(startLock){
 				numStartReady++;
 				if(numStartReady == numPieces){
@@ -207,35 +209,42 @@ public class q1 {
 		}
 
 		/**
+		 * Synchronized function that updates the moveCount.
+		 * */
+		protected synchronized void updateMoveCount(){
+			moveCount++;
+		}
+
+
+		/**
 		 * Function for synchronizing ChessPiece execution with the PrintCount thread
 		 *
 		 * When the PrintCount thread sets its intention to print, wait for all ChessPiece threads to stop execution.
-		 * Notify the PrintCount thread that it may continue execution, and wait to be notified that it is done.
+		 * Notify the PrintCount thread that it may continue execution, and wait to be notified that it is done. This
+		 * is much like a barrier lock.
 		 * */
 		protected void printCount(){
+
 			// If PrintCount sets its intention to print, increase the numPrintReady and wait to be notified that
 			// the printing mechanism is done execution.
 			if(printReady){
-					synchronized(printLock){
-						System.out.println(numPrintReady);
-						try {
-							synchronized(numPrintReady){
-								numPrintReady++;
-								if(numPrintReady == numPieces){
+				synchronized(printLock){
+					try {
+						synchronized(printReadyLock){
+							numPrintReady++;
 
-									// If all threads are now waiting on the PrintCount thread, notify PrintCount to perform its
-									// execution.
-									numPrintReady = 0;
-									synchronized(printReadyLock){
-										printReadyLock.notify();
-									}
-								}
+							// When the last thread comes in, notify the PrintCount thread that it nay execute.
+							if(numPrintReady == numPieces){
+								numPrintReady = 0;
+								printReadyLock.notify();
 							}
-							printLock.wait();
-						} catch (InterruptedException e) {
-							e.printStackTrace();
 						}
+						printLock.wait();
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
 					}
+				}
 			}
 		}
 	}
@@ -257,11 +266,13 @@ public class q1 {
 
 		@Override
 		public void run() {
+
 			startReady();
+
 			while(run){
 
 				// Check the PrintCount threads intention to print, and wait for permission to continue execution.
-//				printCount();
+				printCount();
 
 				// Generate a random number to decide what move this Piece will make.
 				int randomDir = (int) Math.floor(Math.random()*8);
@@ -304,6 +315,10 @@ public class q1 {
 					continue;
 				}
 				else{
+
+					// If a move was made, update the moveCount.
+					updateMoveCount();
+
 					try {
 						Thread.sleep((long) (10+20*Math.random()));
 					} catch (InterruptedException e) {
@@ -322,6 +337,7 @@ public class q1 {
 		 * @return the number of steps covered.
 		 * */
 		private int moveRow(boolean posDirection){
+
 			// Generate a random step.
 			int steps = randomStep(this.y,posDirection);
 
@@ -330,28 +346,20 @@ public class q1 {
 			int sign = posDirection ? 1 : -1;
 			int startPos = this.y;
 
-			// Hold a stack of spaces tha this thrwad has locked
-			Stack<ReentrantLock> locked = new Stack<ReentrantLock>();
+			// Hold the previously locked space
+			ReentrantLock prev = board[this.y][this.x];
 
 			// While the number of steps covered is less than the intended amount and this piece
 			// can acquire the next lock (ie. safely move to the next position), continue stepping.
 			while(stepsCovered < steps){
 				ReentrantLock l = board[startPos+sign*(stepsCovered+1)][this.x];
 				if(l.tryLock()){
-					locked.push(l);
+					prev.unlock();
+					this.y+=sign;
 					stepsCovered++;
+					prev = l;
 				}else{
 					break;
-				}
-			}
-			if(stepsCovered > 0){
-				synchronized(moveCount){
-					locked.pop();
-					this.y = this.y+sign*stepsCovered;
-					board[startPos][this.x].unlock();
-					while(!locked.isEmpty())
-						locked.pop().unlock();
-					moveCount++;
 				}
 			}
 
@@ -366,6 +374,7 @@ public class q1 {
 		 * @return the number of steps covered.
 		 * */
 		private int moveCol(boolean posDirection){
+
 			// Generate a random step
 			int steps = randomStep(this.x,posDirection);
 
@@ -374,29 +383,20 @@ public class q1 {
 			int sign = posDirection ? 1 : -1;
 			int startPos = this.x;
 
-			// Hold a stack of spaces tha this thrwad has locked
-			Stack<ReentrantLock> locked = new Stack<ReentrantLock>();
+			// Hold the previously held lock
+			ReentrantLock prev = board[this.y][this.x];
 
 			// While the number of steps covered is less than the intended amount and this piece
 			// can acquire the next lock (ie. safely move to the next position), continue stepping.
 			while(stepsCovered < steps){
 				ReentrantLock l = board[this.y][startPos+sign*(stepsCovered+1)];
 				if(l.tryLock()){
-					locked.push(l);
+					prev.unlock();
+					this.x+=sign;
 					stepsCovered++;
+					prev = l;
 				}else{
 					break;
-				}
-			}
-
-			if(stepsCovered > 0){
-				synchronized(moveCount){
-					locked.pop();
-					this.x = this.x+sign*stepsCovered;
-					board[this.y][startPos].unlock();
-					while(!locked.isEmpty())
-						locked.pop().unlock();
-					moveCount++;
 				}
 			}
 
@@ -412,6 +412,7 @@ public class q1 {
 		 * @return the number of steps covered.
 		 * */
 		private int moveDiag(boolean posX, boolean posY){
+
 			// Generate a random step
 			int steps = randomStep(posX,posY);
 
@@ -422,29 +423,21 @@ public class q1 {
 			int startPosX = this.x;
 			int startPosY = this.y;
 
-			// Hold a stack of spaces that this thread has locked
-			Stack<ReentrantLock> locked = new Stack<ReentrantLock>();
+			// Hold the previously held lock
+			ReentrantLock prev = board[this.y][this.x];
 
 			// While the number of steps covered is less than the intended amount and this piece
 			// can acquire the next lock (ie. safely move to the next position), continue stepping.
 			while(stepsCovered < steps){
 				ReentrantLock l = board[startPosY+signY*(stepsCovered+1)][startPosX+signX*(stepsCovered+1)];
 				if(l.tryLock()){
-					locked.push(l);
+					prev.unlock();
+					this.x+=signX;
+					this.y+=signY;
 					stepsCovered++;
+					prev = l;
 				}else{
 					break;
-				}
-			}
-			if(stepsCovered > 0){
-				synchronized(moveCount){
-					locked.pop();
-					this.x = this.x+signX*stepsCovered;
-					this.y = this.y+signY*stepsCovered;
-					board[startPosY][startPosX].unlock();
-					while(!locked.isEmpty())
-						locked.pop().unlock();
-					moveCount++;
 				}
 			}
 
@@ -512,7 +505,9 @@ public class q1 {
 
 		@Override
 		public void run() {
+
 			startReady();
+
 			while(run){
 
 				// Check the PrintCount threads intention to print, and wait for permission to continue execution.
@@ -546,6 +541,9 @@ public class q1 {
 					continue;
 				}
 				else{
+
+					// If a move was made, update the moveCount.
+					updateMoveCount();
 					try {
 						Thread.sleep((long) (10+20*Math.random()));
 					} catch (InterruptedException e) {
@@ -575,12 +573,9 @@ public class q1 {
 			if(this.y+moveDirection >= 0 && this.y+moveDirection <= BOARD_SIZE-1 && this.x+side >= 0 && this.x+side <= BOARD_SIZE-1){
 				ReentrantLock l = board[this.y+moveDirection][this.x+side];
 				if(l.tryLock()){
-					synchronized(moveCount){
-						this.y+=moveDirection;
-						this.x+=side;
-						board[startY][startX].unlock();
-						moveCount++;
-					}
+					board[startY][startX].unlock();
+					this.y+=moveDirection;
+					this.x+=side;
 					return true;
 				}else
 					return false;
@@ -597,6 +592,7 @@ public class q1 {
 		 * @return the number of steps covered.
 		 * */
 		private boolean moveCol(boolean posDirection, boolean downSide){
+
 			// Decide which direction to move in, and on which side of the jump to land on.
 			int moveDirection = posDirection ? 3 : -3;
 			int side = downSide ? -1 : 1;
@@ -607,12 +603,9 @@ public class q1 {
 			if(this.x+moveDirection >= 0 && this.x+moveDirection <= BOARD_SIZE-1 && this.y+side >= 0 && this.y+side <= BOARD_SIZE-1){
 				ReentrantLock l = board[this.y+side][this.x+moveDirection];
 				if(l.tryLock()){
-					synchronized(moveCount){
-						this.y+=side;
-						this.x+=moveDirection;
-						board[startY][startX].unlock();
-						moveCount++;
-					}
+					board[startY][startX].unlock();
+					this.y+=side;
+					this.x+=moveDirection;
 					return true;
 				}else
 					return false;
