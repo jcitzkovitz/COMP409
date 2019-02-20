@@ -55,8 +55,8 @@ public class q1 {
         while(printCounter < simLength) {
             int currentSecond = (int) (System.currentTimeMillis() - startTime) / 1000;
             if (currentSecond > printCounter) {
-                long currentMoves = getNumMoves();
-                System.out.println("Number of moves at " + currentSecond + " is " + currentMoves);
+                long numCurrentMoves = getNumMoves();
+                System.out.println("Number of moves at " + currentSecond + " is " + numCurrentMoves);
                 printCounter = currentSecond;
             }
         }
@@ -67,7 +67,7 @@ public class q1 {
 	}
 
 	synchronized public static long getNumMoves() {
-        return numMoves();
+        return numMoves;
     }
 
 	//Method to place the initial pieces on the board and put each piece in the thread array.
