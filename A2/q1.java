@@ -1,6 +1,5 @@
 package A2;
 
-import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -48,14 +47,14 @@ public class q1 {
 			int xPos = 0;
 			int yPos = -1;
 			int i = 0;
-			Random random = new Random();
+
 			while(i < numPieces){
 				xPos = i%BOARD_SIZE;
 				if(xPos == 0)
 					yPos++;
 
 				// Randomly select whether to place a Queen or a Knight at the (xPos,yPos)th position on the board.
-				ChessPiece piece = random.nextDouble() <= 0.5 ? new Queen(xPos,yPos) : new Knight(xPos,yPos);
+				ChessPiece piece = Math.random() <= 0.5 ? new Queen(xPos,yPos) : new Knight(xPos,yPos);
 				pieces[i] = piece;
 				board[yPos][xPos] = piece;
 				i++;
@@ -148,7 +147,6 @@ public class q1 {
 				// Obtain the printLock, print, and then notify all threads that they may continue execution.
 				synchronized(printLock){
 					System.out.println("Moves made at current stage: "+getMoveCount());
-					printBoard();
 					printReady = false;
 					printLock.notifyAll();
 				}
@@ -246,15 +244,13 @@ public class q1 {
 		@Override
 		public void run() {
 
-			Random random = new Random();
-
 			while(run){
 
 				// Check the PrintCount threads intention to print, and wait for permission to continue execution.
 				printCount();
 
 				// Generate a random number to decide what move this Piece will make.
-				int randomDir = random.nextInt(8);
+				int randomDir = (int) Math.floor(Math.random()*8)%8;
 				int steps = 0;
 
 				// Up
@@ -297,7 +293,7 @@ public class q1 {
 					// Update the count and sleep for 10-30 ms.
 					updateCount();
 					try {
-						Thread.sleep((long) (10+20*random.nextDouble()));
+						Thread.sleep((long) (10+20*Math.random()));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -461,7 +457,7 @@ public class q1 {
 		 * @param boolean posDirection is the direction the piece will move in.
 		 * */
 		private int randomStep(int start, boolean posDirection){
-			double rand = (new Random()).nextDouble();
+			double rand = Math.random();
 			rand = rand == 0.0 ? 1.0 : rand;
 
 			// Generate a number of steps that is within the confines of the board.
@@ -478,7 +474,7 @@ public class q1 {
 		 * @param boolean posDirection is the direction the piece will move in.
 		 * */
 		private int randomStep(boolean posX, boolean posY){
-			double rand = (new Random()).nextDouble();
+			double rand = Math.random();
 			rand = rand == 0.0 ? 1.0 : rand;
 
 			int posXSteps = (int) Math.ceil((BOARD_SIZE-this.x-1)*rand);
@@ -516,18 +512,16 @@ public class q1 {
 		@Override
 		public void run() {
 
-			Random random = new Random();
-
 			while(run){
 
 				// Check the PrintCount threads intention to print, and wait for permission to continue execution.
 				printCount();
 
 				// Generate a random direction for this piece to move in
-				int randomDir = random.nextInt(4);
+				int randomDir = (int) (Math.floor(Math.random()*4)%4);
 
 				// Generate a random side of the jump to be on
-				boolean side = random.nextDouble() <= 0.5 ? true : false;
+				boolean side = Math.random() <= 0.5 ? true : false;
 				boolean didStep = false;
 
 				// Up
@@ -554,7 +548,7 @@ public class q1 {
 					// Update the count and sleep for 10-30 ms.
 					updateCount();
 					try {
-						Thread.sleep((long) (10+20*random.nextDouble()));
+						Thread.sleep((long) (10+20*Math.random()));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
