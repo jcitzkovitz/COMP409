@@ -211,6 +211,8 @@ public class q2 {
 
             ExecutorService executor = Executors.newFixedThreadPool(t);
 
+            long startTime = System.currentTimeMillis();
+
             // Execute the Delaunay threads.
  			for(int i = 0; i < t; i++){
  				executor.execute(new Delaunay());
@@ -219,6 +221,9 @@ public class q2 {
  			executor.shutdown();
  			while (!executor.isTerminated());
 
+ 			long endTime = System.currentTimeMillis();
+
+ 			System.out.println("Parallel run time: "+(endTime-startTime)+"ms");
             System.out.println("Flips: "+flipCount);
 
         } catch (Exception e) {
@@ -296,7 +301,7 @@ public class q2 {
     	 * @param Edge remEdge is the edge to be removed
     	 * @param PointPair is the pair of points that are to form a new Edge in the graph.
     	 * */
-        private void flipEdge(Edge remEdge, PointPair addPair){
+        synchronized private void flipEdge(Edge remEdge, PointPair addPair){
 
         	// Remove the edge to be flipped from the graph and add it to the list of removed edges.
         	edges.remove(remEdge);
@@ -311,7 +316,6 @@ public class q2 {
     		addPair.p2.edges.remove(remEdge);
     		addPair.p1.edges.add(newEdge);
     		addPair.p2.edges.add(newEdge);
-    		System.out.println("Flipped: "+newEdge.toString());
 
     		// Update the flip count
     		updateFlipCount();
@@ -325,7 +329,7 @@ public class q2 {
             do{
             	flips = false;
             	for(int i = 0; i < edges.size(); i++){
-
+            		boolean breakOutterLoop = false;
             		Edge e = edges.get(i);
 
             		// Attempt to acquire the lock on e. If not, move onto the next edge.
@@ -350,19 +354,19 @@ public class q2 {
                         			// Otherwise, move onto the next edge.
                         			if(isStillFlippable(e,pair)){
                         				flipEdge(e,pair);
-                        				flips = true;
-                        			}else{
-                        				continue;
+                        				System.out.println(pair);
                         			}
+                        			flips = true;
+                        			breakOutterLoop = true;
                         		}
                         	}
                         }
 
         				// Release the lock on e
         				e.release();
-            		}else
-            			continue;
-                }
+            		}else if(breakOutterLoop)
+            			break;
+                	}
             } while(flips);
     	}
     }
