@@ -1,8 +1,10 @@
 package A2;
 
+import java.util.Stack;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class q1 {
 
@@ -12,15 +14,17 @@ public class q1 {
 	// Global variables regarding chess pieces, the board and the move count.
 	static int numPieces;
 	static volatile ChessPiece[] pieces;
-	static volatile Semaphore[][] board;
+	static volatile ReentrantLock[][] board;
 	static volatile boolean run;
-	static volatile int moveCount;
+	static volatile Integer moveCount;
 
 	// Global variables regarding synchronization for instantaneously accurate printing.
 	static volatile boolean printReady;
-	static volatile int numPrintReady;
-	static Semaphore printLock;
-	static Semaphore printReadyLock;
+	static volatile Integer numPrintReady;
+	static volatile int numStartReady;
+	static ReentrantLock printLock;
+	static ReentrantLock printReadyLock;
+	static ReentrantLock startLock;
 
 	public static void main(String[] args){
 		String invalidArgs = "You must enter 2 arguments:\n1) Number of pieces (integer) \n2) Simulation time in seconds (double)";
@@ -38,33 +42,25 @@ public class q1 {
 			}
 
 			// Set the board, pieces and locks
-			board = new Semaphore[BOARD_SIZE][BOARD_SIZE];
+			board = new ReentrantLock[BOARD_SIZE][BOARD_SIZE];
 			pieces = new ChessPiece[numPieces];
-			printLock = new Semaphore(1);
-			printReadyLock = new Semaphore(1);
+			printLock = new ReentrantLock();
+			printReadyLock = new ReentrantLock();
+			numPrintReady = 0;
+			moveCount = 0;
+			startLock = new ReentrantLock();
 
-			// Initialize pieces on the board (row by row).
-			int xPos = 0;
-			int yPos = -1;
-			int i = 0;
+			int pieceCount = 0;
 
-			while(i < numPieces){
-				xPos = i%BOARD_SIZE;
-				if(xPos == 0)
-					yPos++;
-
-				// Randomly select whether to place a Queen or a Knight at the (xPos,yPos)th position on the board.
-				ChessPiece piece = Math.random() <= 0.5 ? new Queen(xPos,yPos) : new Knight(xPos,yPos);
-				pieces[i] = piece;
-				board[yPos][xPos] = piece;
-				i++;
-			}
-
-			// Initialize all board positions that do not have a chess piece to be a lock.
-			for(i = 0; i < BOARD_SIZE; i++){
+			for(int i = 0; i < BOARD_SIZE; i++){
 				for(int j = 0; j < BOARD_SIZE; j++){
-					if(board[i][j] == null){
-						board[i][j] = new Semaphore(1);
+					board[i][j] = new ReentrantLock();
+					if(pieceCount < numPieces){
+
+						// Randomly select whether to place a Queen or a Knight at the (xPos,yPos)th position on the board.
+						ChessPiece piece = Math.random() <= 0.5 ? new Queen(i,j,pieceCount) : new Knight(i,j,pieceCount);
+						pieces[pieceCount] = piece;
+						pieceCount++;
 					}
 				}
 			}
@@ -78,7 +74,7 @@ public class q1 {
 			executor.execute(new PrintCount());
 
 			// Execute the piece threads.
-			for(i = 0; i < numPieces; i++){
+			for(int i = 0; i < numPieces; i++){
 				executor.execute(pieces[i]);
 			}
 
@@ -116,12 +112,9 @@ public class q1 {
 		for(int i = 0; i < BOARD_SIZE; i++){
 			for(int j = 0; j < BOARD_SIZE; j++){
 				char print = '-';
-				if(board[i][j] instanceof Queen){
-					print = 'Q';
-				}else if(board[i][j] instanceof Knight){
-					print = 'K';
-				}
-				System.out.print(print);
+				if(board[i][j].isLocked())
+					print = 'p';
+				System.out.print(print+" ");
 			}
 			System.out.println();
 		}
@@ -134,28 +127,32 @@ public class q1 {
 		public void run(){
 			while(run){
 
-				// Set the the threads intention to print, and wait for all threads to tell this thread that they've paused execution.
-				synchronized(printReadyLock){
-					try {
-						printReady = true;
-						printReadyLock.wait();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-				}
-
-				// Obtain the printLock, print, and then notify all threads that they may continue execution.
-				synchronized(printLock){
+				synchronized(moveCount){
 					System.out.println("Moves made at current stage: "+getMoveCount());
-					printReady = false;
-					printLock.notifyAll();
 				}
+//				// Set the the threads intention to print, and wait for all threads to tell this thread that they've paused execution.
+//				synchronized(printReadyLock){
+//					try {
+//						printReady = true;
+//						System.out.println("Waiting on printReadyLock...");
+//						printReadyLock.wait();
+//						System.out.println("May continue!");
+//					} catch (InterruptedException e) {
+//						e.printStackTrace();
+//					}
+//				}
+//
+//				// Obtain the printLock, print, and then notify all threads that they may continue execution.
+//				synchronized(printLock){
+//					System.out.println("Moves made at current stage: "+getMoveCount());
+//					printReady = false;
+//					printLock.notifyAll();
+//				}
 
 				// Sleep this thread for 1 second.
 				try {
 					Thread.sleep(1000);
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 			}
@@ -167,10 +164,11 @@ public class q1 {
 	 *
 	 * Each chess piece itself is a lock to be placed on the board of empty locks.
 	 * */
-	static abstract class ChessPiece extends Semaphore implements Runnable{
+	static abstract class ChessPiece implements Runnable{
 		// X and y position of the piece on the board
-		protected int x;
-		protected int y;
+		protected volatile int x;
+		protected volatile int y;
+		protected String id;
 
 		/**
 		 * Constructor
@@ -178,21 +176,35 @@ public class q1 {
 		 * @param int x is the x position of the piece on the board.
 		 * @param int y is the y position of the piece on the board.
 		 * */
-		public ChessPiece(int x, int y){
+		public ChessPiece(int x, int y, String id){
 			// Set itself to be a Semaphore with 1 resource.
-			super(1);
+			super();
 			this.x = x;
 			this.y = y;
-			try {
-				// Acquire its own lock
-				super.acquire();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+			this.id = id;
 		}
 
 		public abstract void run();
-		volatile int syncCount = 0;
+
+		/**
+		 * Function for setting the threads intent to start running.
+		 * Waits for all boards to lock their initial spots for beggining execution.
+		 * */
+		protected void startReady(){
+			board[this.y][this.x].lock();
+			synchronized(startLock){
+				numStartReady++;
+				if(numStartReady == numPieces){
+					startLock.notifyAll();
+				}else{
+					try {
+						startLock.wait();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
 
 		/**
 		 * Function for synchronizing ChessPiece execution with the PrintCount thread
@@ -204,24 +216,26 @@ public class q1 {
 			// If PrintCount sets its intention to print, increase the numPrintReady and wait to be notified that
 			// the printing mechanism is done execution.
 			if(printReady){
+					synchronized(printLock){
+						System.out.println(numPrintReady);
+						try {
+							synchronized(numPrintReady){
+								numPrintReady++;
+								if(numPrintReady == numPieces){
 
-				synchronized(printLock){
-					try {
-						numPrintReady++;
-
-						// If all threads are now waiting on the PrintCount thread, notify PrintCount to perform its
-						// execution.
-						if(numPrintReady == numPieces){
-							synchronized(printReadyLock){
-								numPrintReady = 0;
-								printReadyLock.notify();
+									// If all threads are now waiting on the PrintCount thread, notify PrintCount to perform its
+									// execution.
+									numPrintReady = 0;
+									synchronized(printReadyLock){
+										printReadyLock.notify();
+									}
+								}
 							}
+							printLock.wait();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
 						}
-						printLock.wait();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
 					}
-				}
 			}
 		}
 	}
@@ -237,20 +251,20 @@ public class q1 {
 		 * @param int x is the x position of this piece on the board.
 		 * @param int y is the y position of this piece on the board.
 		 * */
-		public Queen(int x, int y){
-			super(x,y);
+		public Queen(int x, int y,int id){
+			super(x,y,"Q"+id);
 		}
 
 		@Override
 		public void run() {
-
+			startReady();
 			while(run){
 
 				// Check the PrintCount threads intention to print, and wait for permission to continue execution.
-				printCount();
+//				printCount();
 
 				// Generate a random number to decide what move this Piece will make.
-				int randomDir = (int) Math.floor(Math.random()*8)%8;
+				int randomDir = (int) Math.floor(Math.random()*8);
 				int steps = 0;
 
 				// Up
@@ -290,8 +304,6 @@ public class q1 {
 					continue;
 				}
 				else{
-					// Update the count and sleep for 10-30 ms.
-					updateCount();
 					try {
 						Thread.sleep((long) (10+20*Math.random()));
 					} catch (InterruptedException e) {
@@ -318,32 +330,28 @@ public class q1 {
 			int sign = posDirection ? 1 : -1;
 			int startPos = this.y;
 
-			// Store the previous acquired lock to keep note of how far this piece may travel.
-			Semaphore prev = board[this.y][this.x];
+			// Hold a stack of spaces tha this thrwad has locked
+			Stack<ReentrantLock> locked = new Stack<ReentrantLock>();
 
 			// While the number of steps covered is less than the intended amount and this piece
 			// can acquire the next lock (ie. safely move to the next position), continue stepping.
 			while(stepsCovered < steps){
-				Semaphore l = board[startPos+sign*(stepsCovered+1)][this.x];
-				if(l.tryAcquire()){
+				ReentrantLock l = board[startPos+sign*(stepsCovered+1)][this.x];
+				if(l.tryLock()){
+					locked.push(l);
 					stepsCovered++;
-					prev = l;
 				}else{
 					break;
 				}
 			}
-
-			// Swap the piece with the last locked position and update its y position.
-			board[startPos+sign*(stepsCovered)][this.x] = this;
-			board[this.y][this.x] = prev;
-			this.y = startPos+sign*stepsCovered;
-
-			// Release all locks acquired on the path to its current position.
-			for(int i = 0; i < stepsCovered; i++){
-				try{
-					board[startPos+sign*i][this.x].release();
-				}catch(Exception e){
-					System.exit(0);
+			if(stepsCovered > 0){
+				synchronized(moveCount){
+					locked.pop();
+					this.y = this.y+sign*stepsCovered;
+					board[startPos][this.x].unlock();
+					while(!locked.isEmpty())
+						locked.pop().unlock();
+					moveCount++;
 				}
 			}
 
@@ -366,32 +374,29 @@ public class q1 {
 			int sign = posDirection ? 1 : -1;
 			int startPos = this.x;
 
-			// Store the previous acquired lock to keep note of how far this piece may travel.
-			Semaphore prev = board[this.y][this.x];
+			// Hold a stack of spaces tha this thrwad has locked
+			Stack<ReentrantLock> locked = new Stack<ReentrantLock>();
 
 			// While the number of steps covered is less than the intended amount and this piece
 			// can acquire the next lock (ie. safely move to the next position), continue stepping.
 			while(stepsCovered < steps){
-				Semaphore l = board[this.y][startPos+sign*(stepsCovered+1)];
-				if(l.tryAcquire()){
+				ReentrantLock l = board[this.y][startPos+sign*(stepsCovered+1)];
+				if(l.tryLock()){
+					locked.push(l);
 					stepsCovered++;
-					prev = l;
 				}else{
 					break;
 				}
 			}
 
-			// Swap the piece with the last locked position and update its x position.
-			board[this.y][startPos+sign*(stepsCovered)] = this;
-			board[this.y][this.x] = prev;
-			this.x = startPos+sign*stepsCovered;
-
-			// Release all locks acquired on the path to its current position.
-			for(int i = 0; i < stepsCovered; i++){
-				try{
-					board[this.y][startPos+sign*i].release();
-				}catch(Exception e){
-					System.exit(0);
+			if(stepsCovered > 0){
+				synchronized(moveCount){
+					locked.pop();
+					this.x = this.x+sign*stepsCovered;
+					board[this.y][startPos].unlock();
+					while(!locked.isEmpty())
+						locked.pop().unlock();
+					moveCount++;
 				}
 			}
 
@@ -417,33 +422,29 @@ public class q1 {
 			int startPosX = this.x;
 			int startPosY = this.y;
 
-			// Store the previous acquired lock to keep note of how far this piece may travel.
-			Semaphore prev = board[this.y][this.x];
+			// Hold a stack of spaces that this thread has locked
+			Stack<ReentrantLock> locked = new Stack<ReentrantLock>();
 
 			// While the number of steps covered is less than the intended amount and this piece
 			// can acquire the next lock (ie. safely move to the next position), continue stepping.
 			while(stepsCovered < steps){
-				Semaphore l = board[startPosY+signY*(stepsCovered+1)][startPosX+signX*(stepsCovered+1)];
-				if(l.tryAcquire()){
+				ReentrantLock l = board[startPosY+signY*(stepsCovered+1)][startPosX+signX*(stepsCovered+1)];
+				if(l.tryLock()){
+					locked.push(l);
 					stepsCovered++;
-					prev = l;
 				}else{
 					break;
 				}
 			}
-
-			// Swap the piece with the last locked position and update its x position.
-			board[startPosY+signY*(stepsCovered)][startPosX+signX*(stepsCovered)] = this;
-			board[this.y][this.x] = prev;
-			this.x = startPosX+signX*stepsCovered;
-			this.y = startPosY+signY*stepsCovered;
-
-			// Release all locks acquired on the path to its current position.
-			for(int i = 0; i < stepsCovered; i++){
-				try{
-					board[startPosY+signY*i][startPosX+signX*i].release();
-				}catch(Exception e){
-					System.exit(0);
+			if(stepsCovered > 0){
+				synchronized(moveCount){
+					locked.pop();
+					this.x = this.x+signX*stepsCovered;
+					this.y = this.y+signY*stepsCovered;
+					board[startPosY][startPosX].unlock();
+					while(!locked.isEmpty())
+						locked.pop().unlock();
+					moveCount++;
 				}
 			}
 
@@ -505,13 +506,13 @@ public class q1 {
 		 * @param int x is the x position of this piece on the board.
 		 * @param int y is the y position of this piece on the board.
 		 * */
-		public Knight(int x, int y){
-			super(x,y);
+		public Knight(int x, int y, int id){
+			super(x,y,"K"+id);
 		}
 
 		@Override
 		public void run() {
-
+			startReady();
 			while(run){
 
 				// Check the PrintCount threads intention to print, and wait for permission to continue execution.
@@ -545,8 +546,6 @@ public class q1 {
 					continue;
 				}
 				else{
-					// Update the count and sleep for 10-30 ms.
-					updateCount();
 					try {
 						Thread.sleep((long) (10+20*Math.random()));
 					} catch (InterruptedException e) {
@@ -569,16 +568,19 @@ public class q1 {
 			// Decide which direction to move in, and which side of the jump to land on.
 			int moveDirection = posDirection ? 3 : -3;
 			int side = leftSide ? -1 : 1;
+			int startX = this.x;
+			int startY = this.y;
 
 			// If the move is within the bounds of the board, attempt to lock the new position and move there
 			if(this.y+moveDirection >= 0 && this.y+moveDirection <= BOARD_SIZE-1 && this.x+side >= 0 && this.x+side <= BOARD_SIZE-1){
-				Semaphore l = board[this.y+moveDirection][this.x+side];
-				if(l.tryAcquire()){
-					board[this.y+moveDirection][this.x+side] = this;
-					board[this.y][this.x] = l;
-					board[this.y][this.x].release();
-					this.y+=moveDirection;
-					this.x+=side;
+				ReentrantLock l = board[this.y+moveDirection][this.x+side];
+				if(l.tryLock()){
+					synchronized(moveCount){
+						this.y+=moveDirection;
+						this.x+=side;
+						board[startY][startX].unlock();
+						moveCount++;
+					}
 					return true;
 				}else
 					return false;
@@ -598,16 +600,19 @@ public class q1 {
 			// Decide which direction to move in, and on which side of the jump to land on.
 			int moveDirection = posDirection ? 3 : -3;
 			int side = downSide ? -1 : 1;
+			int startX = this.x;
+			int startY = this.y;
 
 			// If the move is within the bounds of the board, attempt to the lock the new position and move there.
 			if(this.x+moveDirection >= 0 && this.x+moveDirection <= BOARD_SIZE-1 && this.y+side >= 0 && this.y+side <= BOARD_SIZE-1){
-				Semaphore l = board[this.y+side][this.x+moveDirection];
-				if(l.tryAcquire()){
-					board[this.y+side][this.x+moveDirection] = this;
-					board[this.y][this.x] = l;
-					board[this.y][this.x].release();
-					this.y+=side;
-					this.x+=moveDirection;
+				ReentrantLock l = board[this.y+side][this.x+moveDirection];
+				if(l.tryLock()){
+					synchronized(moveCount){
+						this.y+=side;
+						this.x+=moveDirection;
+						board[startY][startX].unlock();
+						moveCount++;
+					}
 					return true;
 				}else
 					return false;
