@@ -328,11 +328,9 @@ public class q2 {
     		boolean flips = false;
             do{
             	flips = false;
+            	boolean breakOutterLoop = false;
             	for(int i = 0; i < edges.size(); i++){
-            		Edge e ;
-            		synchronized(edges){
-            			e = edges.get(i);
-            		}
+            		Edge e = edges.get(i);
 
             		// Attempt to acquire the lock on e. If not, move onto the next edge.
             		if(e.tryAcquire()){
@@ -353,11 +351,13 @@ public class q2 {
                         		synchronized(flipLock){
 
                         			// If the edge is still flippable (ie a connecting edge to e still exists) then flip it.
+                        			// After flipping it, go back to the beggining of the edge list and begin rexamining the graph.
                         			// Otherwise, move onto the next edge.
                         			if(isStillFlippable(e,pair)){
                         				flipEdge(e,pair);
+                        				flips = true;
+                        				breakOutterLoop = true;
                         			}
-                        			flips = true;
                         			break;
                         		}
                         	}
@@ -366,6 +366,9 @@ public class q2 {
         				// Release the lock on e
         				e.release();
             		}
+
+            		if(breakOutterLoop)
+            			break;
 
                 }
             } while(flips);
