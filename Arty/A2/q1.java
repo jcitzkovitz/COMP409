@@ -6,11 +6,13 @@ import java.util.Random;
 public class q1 {
 
     //Volatile variable for number of moves.
-    public static volatile long numMoves;
+    public static long numMoves;
     //volatile Board.
     public static volatile Board board;
     //Array to store all the threads per piece.
     public static Thread[] allThreads;
+
+    //Global variables for beginning of program run and simulation length.
     public static long startTime;
     public static int simLength;
 
@@ -31,21 +33,24 @@ public class q1 {
             System.exit(0);
         }
 
-
+        //Parse simulation length.
         simLength = Integer.parseInt(args[1]);
 
         //Initialize board.
         board = new Board();
 
-        //Place all the initial pieces;
+        //Place all the initial pieces and prepare threads.
         placeInitialPieces(numPieces);
 
+        //Start timer.
         startTime = System.currentTimeMillis();
 
+        //Start all threads.
         for (int i = 0; i < allThreads.length; i++) {
             allThreads[i].start();
         }
 
+        //Print counter procedure every second.
         int printCounter = 0;
         while(printCounter < simLength) {
             int currentSecond = (int) (System.currentTimeMillis() - startTime) / 1000;
@@ -54,6 +59,7 @@ public class q1 {
                 printCounter = currentSecond;
             }
         }
+        //Final number of moves print.
         System.out.println("Total number of moves : " + numMoves);
 
 
@@ -62,8 +68,10 @@ public class q1 {
 	//Method to place the initial pieces on the board and put each piece in the thread array.
 	private static void placeInitialPieces(int numberOfPieces) {
         Piece piece;
+
         //Initialize data structure for threads.
         allThreads = new Thread[numberOfPieces];
+
         for (int i = 0; i < numberOfPieces; i++) {
             double probability = Math.random();
             //50% change of creating a knight or a queen.
@@ -73,18 +81,22 @@ public class q1 {
                 piece = new Piece(false, i);
             }
 
-            //initialize placement to false.
+            //Initialize placement to false.
             boolean isPlaced = false;
 
             //Until we find an unoccupied tile.
             while (!isPlaced) {
+
                 //Generate random x and y positions.
                 Random rand = new Random();
+
                 //Generate a random position on the board.
                 int xPos = rand.nextInt(8);
                 int yPos = rand.nextInt(8);
-                //If it's not occupied we go there.
+
+                //If it's not occupied we go there and set it to occupy.
                 boolean status = board.tiles[xPos][yPos].goTo();
+
                 if (status) {
                     piece.setCurrentPosition(board.tiles[xPos][yPos]);
                     board.piecesList.add(piece);
@@ -101,19 +113,22 @@ public class q1 {
         numMoves++;
     }
 
-    //Class to represents chess square.
+    //Class to represents Chess square.
 	static class Tile {
 
+        //Atributes. Square locations are final.
         private boolean isOccupied;
         private final int x;
         private final int y;
 
+        //Tile constructor.
         public Tile(int x, int y) {
             isOccupied = false;
             this.x = x;
             this.y = y;
         }
 
+        //Getter methods for coordinates.
         public int getX() {
             return x;
         }
@@ -122,6 +137,7 @@ public class q1 {
             return y;
         }
 
+        //Getter method for occupancy.
         public boolean getIsOccupied() {
             return isOccupied;
         }
@@ -147,6 +163,8 @@ public class q1 {
     //Class to organize Tiles into a board. Has a double array of Tiles and a List of all pieces on the board.
 	static class Board {
         List<Piece> piecesList;
+
+        //Keep tile information volatile
         Tile[][] tiles;
 
         //Board constructor.
@@ -165,8 +183,9 @@ public class q1 {
     //The run() method will be the one displacing the pieces all across the board.
     static class Piece implements Runnable {
         private boolean isKnight;
-        private int id;
+        private final int id;
         private Tile currentPosition;
+
 
         public int getId() {
             return id;
@@ -183,14 +202,17 @@ public class q1 {
             return this.isKnight;
         }
 
+        //Setter for Piece position.
         public void setCurrentPosition(Tile tile) {
             currentPosition = tile;
         }
 
+        //Gets current Position of piece.
         public Tile getCurrentPosition() {
             return currentPosition;
         }
 
+        //Returns a legal knight move from provided coordinates.
         public int[] getKnightMove(int curX,int curY) {
             //This array will store the result.
             int[] result = new int[2];
@@ -213,18 +235,30 @@ public class q1 {
             return result;
         }
 
-        //Returns the target space and the direction in which the Queen is going.
+        //Returns a legal target space and the direction in which the Queen is going.
         public int[][] getQueenMove(int curX, int curY) {
+            //Datastructure to store result.
             int[][] result = new int[2][2];
-            Random rand = new Random();
+
+
+
+            //The Queen has 8 possible directions.
             int[][] allDirections = {{1,0},{1,1},{0,1},{-1,1},{-1,0},{-1,-1},{0,-1},{1,-1}};
+
+            //This data structure will return the moves and directions in which the queen can go.
+            //It ensures the moves remain within the bounds of the board.
             ArrayList< ArrayList<int[]>> movesAndDirections = filterOutOfBounds(curX, curY, allDirections);
             ArrayList<int[]> legalDirections = movesAndDirections.get(1);
-            //Pick a random direction.
+
+            //Initialize random for random number generator and pick a random valid direction.
+            Random rand = new Random();
             int index = rand.nextInt(legalDirections.size());
             int[] direction = legalDirections.get(index);
+
+            //Store the direction.
             result[1] = direction;
 
+            //Get a random number of steps and get target space from that number.
             int steps = rand.nextInt(7) + 1;
             int nextX = curX + (direction[0] * steps);
             int nextY = curY + (direction[1] * steps);
@@ -235,6 +269,8 @@ public class q1 {
                 nextX = curX + (direction[0] * steps);
                 nextY = curY + (direction[1] * steps);
             }
+
+            //Store the target space. Direction of that space from current square is already stored.
             result[0][0] = nextX;
             result[0][1] = nextY;
 
@@ -243,9 +279,14 @@ public class q1 {
 
         //Function that filters out all out of bounds moves from random move options.
         public static ArrayList<ArrayList<int[]>> filterOutOfBounds(int x, int y, int[][] moves) {
+
+            //Initialize result data structures.
             ArrayList<int[]> results = new ArrayList<>();
             ArrayList<int[]> keptMoves = new ArrayList<>();
-            for (int i = 0; i<moves.length; i++) {
+
+            // For each direction provided, make sure there is at least one tile between the current space and the border.
+            // If there aren't we do not consider that direction, as we cannot move there.
+            for (int i = 0; i < moves.length; i++) {
                 int nextX = x + moves[i][0];
                 int nextY = y + moves[i][1];
 
@@ -254,68 +295,101 @@ public class q1 {
                     keptMoves.add(moves[i]);
                 }
             }
+            //Store all resulting legal target spaces and their directions and return them.
             ArrayList<ArrayList<int[]>> allResults = new ArrayList<>();
             allResults.add(results);
             allResults.add(keptMoves);
             return allResults;
         }
 
+        //This method returns true if the piece succesfully did a random legal move, and false otherwise.
         public boolean move() {
-            boolean result = false;
+
+            
+            //get curernt piece location.
+            int currentX = this.getCurrentPosition().getX();
+            int currentY = this.getCurrentPosition().getY();
+
             //Knight scenario. 
             if (this.isKnight) {
-                int currentX = this.getCurrentPosition().getX();
-                int currentY = this.getCurrentPosition().getY();
+
+                //Get a random target space.
                 int[] nextPosition = getKnightMove(currentX, currentY);
                 int targetX = nextPosition[0];
                 int targetY = nextPosition[1];
+
+                //Attempt to lock the target space. If successful, go there. Else, return false.
                 boolean status = board.tiles[targetX][targetY].goTo();
                 if (status) {
                     this.setCurrentPosition(board.tiles[targetX][targetY]);
                     board.tiles[currentX][currentY].leave();
                     incNumMoves();
-                    result = true;
+                    return true;
                 }
                 else {
-                    result = false;
+                    return false;
                 }
             }
             //Queen scenario.
             else {
-                int currentX = this.getCurrentPosition().getX();
-                int currentY = this.getCurrentPosition().getY();
+                //Get a legal queen move.
                 int[][] nextPosition = getQueenMove(currentX, currentY);
+
+                //Store target space and direction in which it is.
                 int targetX = nextPosition[0][0];
                 int targetY = nextPosition[0][1];
                 int[] direction = nextPosition[1];
+
+                //Initiliaze step counter.
                 int stepsCounter = 0;
+
+                //Until we arrive at our target space, lock every square in our path to prevent being blocked.
                 while (currentX != targetX && currentY != targetY) {
+
+                    //Get one step closer to target and acquire lock.
                     int nextX = currentX + direction[0];
                     int nextY = currentY + direction[1];
                     boolean status = board.tiles[nextX][nextY].goTo();
+
+
                     if (status) {
+
+                        //If successful, we move to target and set our current position to destination.
                         if (nextX == targetX && nextY == targetY) {
                             this.setCurrentPosition(board.tiles[nextX][nextY]);
                             incNumMoves();
+                            //We navigate backwards until our start position to release the lock.
                             while (stepsCounter >= 0) {
                                 board.tiles[currentX][currentY].leave();
                                 currentX = currentX - direction[0];
                                 currentY = currentY - direction[1];
                                 stepsCounter--;
                             }
+                            //Method was successful.
                             return true;
 
                         }
+                        //If we didn't arrive to our destination but the next tile was free, increment step counter and
+                        //update tile location.
                         else {
                             stepsCounter++;
                             currentX = currentX + direction[0];
                             currentY = currentY + direction[1];
                         }
                     }
+
+                    //IF we did not acquire the lock.
                     else {
+
+                        //If we already moved but did not get to our initally target position, travel to here
+                        // and count as successful move. This still counts as a random move by the queen.
                         if (stepsCounter > 0) {
+
+                            //Update current position.
                             this.setCurrentPosition(board.tiles[currentX][currentY]);
                             incNumMoves();
+
+                            //Unlock all previous tiles on our path.
                             while (stepsCounter >= 0) {
                                 board.tiles[currentX][currentY].leave();
                                 currentX = currentX - direction[0];
@@ -324,6 +398,7 @@ public class q1 {
                             }
                             return true;
                         }
+                        //Return false if we are directly blocked by another piece.
                         else {
                             return false;
                         }
@@ -333,6 +408,7 @@ public class q1 {
                 }
 
             }
+            //Return faslse by default
             return false;
         }
 
