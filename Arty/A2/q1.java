@@ -1,3 +1,4 @@
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -198,7 +199,10 @@ public class q1 {
             int[][]  allMoves = {{-2,1}, {-1,2}, {1,2}, {2,1}, {2, -1}, {1, -2}, {-1,-2}, {-2, -1}};
 
             //Store only moves within legal bounds in the ArrayList legalMoves.
-            ArrayList<int[]> legalMoves = filterOutOfBounds(curX, curY, allMoves);
+            ArrayList<ArrayList<int[]>> movesAndDirections = filterOutOfBounds(curX, curY, allMoves);
+            ArrayList<int[]> legalMoves = movesAndDirections.get(0);
+
+
 
             //Get the next move randomly.
             Random rand = new Random();
@@ -213,22 +217,23 @@ public class q1 {
         public int[][] getQueenMove(int curX, int curY) {
             int[][] result = new int[2][2];
             Random rand = new Random();
-            int[][] allDirections = {{1,0},{1,1},{0,1},{-1,-1},{-1,0},{-1,-1},{0,-1},{1,-1}};
-            ArrayList<int[]> legalDirections = filterOutOfBounds(curX, curY, allDirections);
-
+            int[][] allDirections = {{1,0},{1,1},{0,1},{-1,1},{-1,0},{-1,-1},{0,-1},{1,-1}};
+            ArrayList< ArrayList<int[]>> movesAndDirections = filterOutOfBounds(curX, curY, allDirections);
+            ArrayList<int[]> legalDirections = movesAndDirections.get(1);
             //Pick a random direction.
             int index = rand.nextInt(legalDirections.size());
             int[] direction = legalDirections.get(index);
             result[1] = direction;
+
             int steps = rand.nextInt(7) + 1;
-            int nextX = direction[0] * steps;
-            int nextY = direction[1] * steps;
+            int nextX = curX + (direction[0] * steps);
+            int nextY = curY + (direction[1] * steps);
 
             //Generate new step number until we get a location that is on the board.
-            while (!(nextX < 8 && nextX > -1 && nextY < 8 && nextY < -1)) {
+            while (!(nextX < 8 && nextX > -1 && nextY < 8 && nextY > -1)) {
                 steps = rand.nextInt(7) + 1;
-                nextX = direction[0] * steps;
-                nextY = direction[1] * steps;
+                nextX = curX + (direction[0] * steps);
+                nextY = curY + (direction[1] * steps);
             }
             result[0][0] = nextX;
             result[0][1] = nextY;
@@ -237,17 +242,22 @@ public class q1 {
         }
 
         //Function that filters out all out of bounds moves from random move options.
-        public static ArrayList<int[]> filterOutOfBounds(int x, int y, int[][] moves) {
+        public static ArrayList<ArrayList<int[]>> filterOutOfBounds(int x, int y, int[][] moves) {
             ArrayList<int[]> results = new ArrayList<>();
+            ArrayList<int[]> keptMoves = new ArrayList<>();
             for (int i = 0; i<moves.length; i++) {
                 int nextX = x + moves[i][0];
                 int nextY = y + moves[i][1];
 
                 if(nextX < 8 && nextX > -1  && nextY < 8 && nextY > -1) {
                     results.add(new int[]{nextX, nextY});
+                    keptMoves.add(moves[i]);
                 }
             }
-            return results;
+            ArrayList<ArrayList<int[]>> allResults = new ArrayList<>();
+            allResults.add(results);
+            allResults.add(keptMoves);
+            return allResults;
         }
 
         public boolean move() {
@@ -278,12 +288,52 @@ public class q1 {
                 int targetX = nextPosition[0][0];
                 int targetY = nextPosition[0][1];
                 int[] direction = nextPosition[1];
-               // while (currentX != targetX && currentY != targetY) {
+                int stepsCounter = 0;
+                while (currentX != targetX && currentY != targetY) {
+                    int nextX = currentX + direction[0];
+                    int nextY = currentY + direction[1];
+                    boolean status = board.tiles[nextX][nextY].goTo();
+                    if (status) {
+                        if (nextX == targetX && nextY == targetY) {
+                            this.setCurrentPosition(board.tiles[nextX][nextY]);
+                            incNumMoves();
+                            while (stepsCounter >= 0) {
+                                board.tiles[currentX][currentY].leave();
+                                currentX = currentX - direction[0];
+                                currentY = currentY - direction[1];
+                                stepsCounter--;
+                            }
+                            return true;
+
+                        }
+                        else {
+                            stepsCounter++;
+                            currentX = currentX + direction[0];
+                            currentY = currentY + direction[1];
+                        }
+                    }
+                    else {
+                        if (stepsCounter > 0) {
+                            this.setCurrentPosition(board.tiles[currentX][currentY]);
+                            incNumMoves();
+                            while (stepsCounter >= 0) {
+                                board.tiles[currentX][currentY].leave();
+                                currentX = currentX - direction[0];
+                                currentY = currentY - direction[1];
+                                stepsCounter--;
+                            }
+                            return true;
+                        }
+                        else {
+                            return false;
+                        }
+                    }
+
 
                 }
 
-                
-            return result;
+            }
+            return false;
         }
 
 
