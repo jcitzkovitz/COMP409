@@ -1,5 +1,6 @@
 package A2;
 
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -11,7 +12,7 @@ public class q1 {
 
 	// Global variables regarding chess pieces, the board and the move count.
 	static int numPieces;
-	static ChessPiece[] pieces;
+	static volatile ChessPiece[] pieces;
 	static volatile Semaphore[][] board;
 	static volatile boolean run;
 	static volatile int moveCount;
@@ -47,13 +48,14 @@ public class q1 {
 			int xPos = 0;
 			int yPos = -1;
 			int i = 0;
+			Random random = new Random();
 			while(i < numPieces){
 				xPos = i%BOARD_SIZE;
 				if(xPos == 0)
 					yPos++;
 
 				// Randomly select whether to place a Queen or a Knight at the (xPos,yPos)th position on the board.
-				ChessPiece piece = Math.random() <= 0.5 ? new Queen(xPos,yPos) : new Knight(xPos,yPos);
+				ChessPiece piece = random.nextDouble() <= 0.5 ? new Queen(xPos,yPos) : new Knight(xPos,yPos);
 				pieces[i] = piece;
 				board[yPos][xPos] = piece;
 				i++;
@@ -67,8 +69,6 @@ public class q1 {
 					}
 				}
 			}
-
-			printBoard();
 
 			run = true;
 
@@ -93,7 +93,6 @@ public class q1 {
 
 			// Print the final move count.
 			System.out.println("Final moves made: "+getMoveCount());
-			printBoard();
 		}
 	}
 
@@ -139,11 +138,9 @@ public class q1 {
 				// Set the the threads intention to print, and wait for all threads to tell this thread that they've paused execution.
 				synchronized(printReadyLock){
 					try {
-//						System.out.println("Ready to print...");
 						printReady = true;
 						printReadyLock.wait();
 					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 				}
@@ -151,6 +148,7 @@ public class q1 {
 				// Obtain the printLock, print, and then notify all threads that they may continue execution.
 				synchronized(printLock){
 					System.out.println("Moves made at current stage: "+getMoveCount());
+					printBoard();
 					printReady = false;
 					printLock.notifyAll();
 				}
@@ -201,14 +199,14 @@ public class q1 {
 		/**
 		 * Function for synchronizing ChessPiece execution with the PrintCount thread
 		 *
-		 * When the PrintCount thread sets its intention to print, wait for all ChessPiece threads to stop execution
-		 * notify the PrintCount thread that it may continue execution, and wait to be notified that it is done.
+		 * When the PrintCount thread sets its intention to print, wait for all ChessPiece threads to stop execution.
+		 * Notify the PrintCount thread that it may continue execution, and wait to be notified that it is done.
 		 * */
 		protected void printCount(){
 			// If PrintCount sets its intention to print, increase the numPrintReady and wait to be notified that
 			// the printing mechanism is done execution.
 			if(printReady){
-//				System.out.println(++this.syncCount+" waiting at sync...");
+
 				synchronized(printLock){
 					try {
 						numPrintReady++;
@@ -218,11 +216,9 @@ public class q1 {
 						if(numPrintReady == numPieces){
 							synchronized(printReadyLock){
 								numPrintReady = 0;
-//								System.out.println("Notify printer!");
 								printReadyLock.notify();
 							}
 						}
-//						System.out.println(numPrintReady+" waiting for printLock - total: ");
 						printLock.wait();
 					} catch (InterruptedException e) {
 						e.printStackTrace();
@@ -249,13 +245,16 @@ public class q1 {
 
 		@Override
 		public void run() {
+
+			Random random = new Random();
+
 			while(run){
 
 				// Check the PrintCount threads intention to print, and wait for permission to continue execution.
 				printCount();
 
 				// Generate a random number to decide what move this Piece will make.
-				int randomDir = (int) Math.floor((4*Math.random()));
+				int randomDir = random.nextInt(8);
 				int steps = 0;
 
 				// Up
@@ -274,7 +273,23 @@ public class q1 {
 				else if(randomDir == 3)
 					steps = moveCol(true);
 
-				// If the random move generated cannot be performed, restart the loop
+				// Right Down
+				else if(randomDir == 4)
+					steps = moveDiag(true,true);
+
+				// Right Up
+				else if(randomDir == 5)
+					steps = moveDiag(true,false);
+
+				// Left Up
+				else if(randomDir == 6)
+					steps = moveDiag(false,false);
+
+				// Left Down
+				else if(randomDir == 7)
+					steps = moveDiag(false,true);
+
+				// If the random move generated cannot be performed (ie. is 0), restart the loop
 				if(steps == 0){
 					continue;
 				}
@@ -282,7 +297,7 @@ public class q1 {
 					// Update the count and sleep for 10-30 ms.
 					updateCount();
 					try {
-						Thread.sleep((long) (10+20*Math.random()));
+						Thread.sleep((long) (10+20*random.nextDouble()));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -332,7 +347,6 @@ public class q1 {
 				try{
 					board[startPos+sign*i][this.x].release();
 				}catch(Exception e){
-					System.out.println("ROW: is queen? "+(board[startPos+sign*i][this.x] instanceof Queen));
 					System.exit(0);
 				}
 			}
@@ -381,7 +395,6 @@ public class q1 {
 				try{
 					board[this.y][startPos+sign*i].release();
 				}catch(Exception e){
-					System.out.println("COL: is queen? "+(board[this.y][startPos+sign*i] instanceof Queen));
 					System.exit(0);
 				}
 			}
@@ -390,13 +403,65 @@ public class q1 {
 		}
 
 		/**
-		 * Generate a random number of steps to take
+		 * Function that generates the Queen's next diagonal move
+		 *
+		 * @param boolean posX decides which direction the piece will move horizontally (+ = right, - = left).
+		 * @param boolean posY decides which direction the piece will move vertically (+ = down, - = up).
+		 *
+		 * @return the number of steps covered.
+		 * */
+		private int moveDiag(boolean posX, boolean posY){
+			// Generate a random step
+			int steps = randomStep(posX,posY);
+
+			// Take note of the number of stepsCovered, the direction and the starting position.
+			int stepsCovered = 0;
+			int signX = posX ? 1 : -1;
+			int signY = posY ? 1 : -1;
+			int startPosX = this.x;
+			int startPosY = this.y;
+
+			// Store the previous acquired lock to keep note of how far this piece may travel.
+			Semaphore prev = board[this.y][this.x];
+
+			// While the number of steps covered is less than the intended amount and this piece
+			// can acquire the next lock (ie. safely move to the next position), continue stepping.
+			while(stepsCovered < steps){
+				Semaphore l = board[startPosY+signY*(stepsCovered+1)][startPosX+signX*(stepsCovered+1)];
+				if(l.tryAcquire()){
+					stepsCovered++;
+					prev = l;
+				}else{
+					break;
+				}
+			}
+
+			// Swap the piece with the last locked position and update its x position.
+			board[startPosY+signY*(stepsCovered)][startPosX+signX*(stepsCovered)] = this;
+			board[this.y][this.x] = prev;
+			this.x = startPosX+signX*stepsCovered;
+			this.y = startPosY+signY*stepsCovered;
+
+			// Release all locks acquired on the path to its current position.
+			for(int i = 0; i < stepsCovered; i++){
+				try{
+					board[startPosY+signY*i][startPosX+signX*i].release();
+				}catch(Exception e){
+					System.exit(0);
+				}
+			}
+
+			return stepsCovered;
+		}
+
+		/**
+		 * Generate a random number of steps to take in the vertical/horizontal direction
 		 *
 		 * @param int start is the starting position of the piece.
 		 * @param boolean posDirection is the direction the piece will move in.
 		 * */
 		private int randomStep(int start, boolean posDirection){
-			double rand = Math.random();
+			double rand = (new Random()).nextDouble();
 			rand = rand == 0.0 ? 1.0 : rand;
 
 			// Generate a number of steps that is within the confines of the board.
@@ -404,6 +469,32 @@ public class q1 {
 				return (int) Math.ceil((BOARD_SIZE-start-1)*rand);
 			else
 				return (int) Math.ceil(start*rand);
+		}
+
+		/**
+		 * Generate a random number of steps to take in the diagonal direction
+		 *
+		 * @param int start is the starting position of the piece.
+		 * @param boolean posDirection is the direction the piece will move in.
+		 * */
+		private int randomStep(boolean posX, boolean posY){
+			double rand = (new Random()).nextDouble();
+			rand = rand == 0.0 ? 1.0 : rand;
+
+			int posXSteps = (int) Math.ceil((BOARD_SIZE-this.x-1)*rand);
+			int posYSteps = (int) Math.ceil((BOARD_SIZE-this.y-1)*rand);
+			int negXSteps = (int) Math.ceil(this.x*rand);
+			int negYSteps = (int) Math.ceil(this.y*rand);
+
+			// Return a number of steps that is within the confines of the board.
+			if(posX && posY)
+				return Math.min(posXSteps, posYSteps);
+			else if(posX && !posY)
+				return Math.min(posXSteps, negYSteps);
+			else if(!posX && !posY)
+				return Math.min(negXSteps, negYSteps);
+			else
+				return Math.min(negXSteps, posYSteps);
 		}
 	}
 
@@ -424,16 +515,19 @@ public class q1 {
 
 		@Override
 		public void run() {
+
+			Random random = new Random();
+
 			while(run){
 
 				// Check the PrintCount threads intention to print, and wait for permission to continue execution.
 				printCount();
 
 				// Generate a random direction for this piece to move in
-				int randomDir = (int) Math.floor((4*Math.random()));
+				int randomDir = random.nextInt(4);
 
 				// Generate a random side of the jump to be on
-				boolean side = Math.random() <= 0.5 ? true : false;
+				boolean side = random.nextDouble() <= 0.5 ? true : false;
 				boolean didStep = false;
 
 				// Up
@@ -460,7 +554,7 @@ public class q1 {
 					// Update the count and sleep for 10-30 ms.
 					updateCount();
 					try {
-						Thread.sleep((long) (10+20*Math.random()));
+						Thread.sleep((long) (10+20*random.nextDouble()));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
