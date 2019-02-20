@@ -5,7 +5,8 @@ class Point {
     double x,y;
     
     // Set of edges attached to this point
-    public ArrayList<Edge> edges;
+    public volatile ArrayList<Edge> edges;
+
 
     private boolean isLocked;
 
@@ -39,24 +40,27 @@ class Point {
         notifyAll();
     }
 
-    public synchronized void waitPoint() throws InterruptedException {
+    public synchronized void waitPoint() {
         //While the point is locked, we wait.
-        while (isLocked) {
-            wait();;
+        try {
+            while (isLocked) {
+                wait();
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
+
     }
 
-    public synchronized ArrayList<Edge> getPointEdges() {
-
+    synchronized public ArrayList<Edge> getPointEdges() {
         ArrayList<Edge> edgeHolder = new ArrayList<>();
-        for (Edge e: edges) {
-            edgeHolder.add(e);
+        for (int i = 0; i < edges.size(); i++) {
+            Edge edge = edges.get(i);
+            edgeHolder.add(edge);
         }
+
         return edgeHolder;
     }
-
-
-    
 
 }
 
@@ -92,13 +96,13 @@ class Edge {
         //While both are locked, we release one and wait for the other.
         while (!(pIsUnlocked && qIsUnlocked)) {
 
-            if (p.isUnlocked()) {
+            if (pIsUnlocked) {
                 //p.isUnlocked locks the point. We release it while we don't have q.
                 p.unlock();
                 q.waitPoint();
             }
 
-            else if (q.isUnlocked()) {
+            else if (qIsUnlocked) {
                 q.unlock();
                 p.waitPoint();
             }
@@ -106,6 +110,9 @@ class Edge {
                 p.waitPoint();
                 q.waitPoint();
             }
+
+            pIsUnlocked = p.isUnlocked();
+            qIsUnlocked = q.isUnlocked();
         }
     }
     
@@ -135,7 +142,7 @@ public class q2 {
         return false;
     }
 
-    public synchronized  void incTotalFlips() {
+    public static synchronized  void incSumFlips() {
         sumFlips++;
     }
 
@@ -196,8 +203,20 @@ public class q2 {
             // Now your code is required!
             sumFlips = 0;
 
+            Thread[] allThreads = new Thread[t];
+            long startTime = System.currentTimeMillis();
 
+            for (int j = 0; j < t; j++) {
+                allThreads[j] = new Thread(new delaunayTriangle());
+                allThreads[j].start();
+            }
 
+            for (int k = 0; k < allThreads.length; k++) {
+                allThreads[k].join();
+            }
+            long runTime = System.currentTimeMillis() - startTime;
+            System.out.println("Delaunay triangualtion time to convergence :" + runTime + " ms.");
+            System.out.println("Total number of flips: " + sumFlips );
 
 
         } catch (Exception e) {
@@ -216,9 +235,21 @@ public class q2 {
             return area;
         }
 
+       //Returns angle formed by three points. B is assumed to be the middle point i.e. point at which angle is formed.
+        public double getAngle(Point a, Point b, Point c) {
+            double uLenght = Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2);
+            double vLength = Math.pow(b.x - c.x, 2) + Math.pow(b.y - c.y, 2);
+            double wLength = Math.pow(c.x - a.x, 2) + Math.pow(c.y - a.y, 2);
+            double angle = Math.toDegrees(Math.acos((uLenght + vLength - wLength)/ Math.sqrt(4 * uLenght * vLength)));
+            return angle;
+
+        }
+
+
+
+
         @Override
         public void run() {
-
             //Pick a random edge to begin with.
             Random random = new Random();
             int index = random.nextInt(edges.size());
@@ -231,8 +262,6 @@ public class q2 {
                 edgesToCheck.add(edges.get(i));
             }
 
-            //Initialize counter.
-            int flipCount = 0;
 
             //Loop until termination: all edges have been viewed without having been modified.
             boolean hasConverged = false;
@@ -258,6 +287,7 @@ public class q2 {
                         //Get the point the opposite point of u forming edge.
                         Point potential;
 
+
                         if (uPoint.same(edge.p)) {
                             potential = edge.q;
 
@@ -265,10 +295,10 @@ public class q2 {
                         else {
                             potential = edge.p;
                         }
-
+                        ArrayList<Edge> potentialEdges = potential.getPointEdges();
                         boolean isTriangle = false;
                         //Get all edges from potential point and find out if it's connected to v.
-                        ArrayList<Edge> potentialEdges = potential.getPointEdges();
+
                         for (Edge edge1 : potentialEdges) {
                             Point u1 = edge1.p;
                             Point v1 = edge1.q;
@@ -290,7 +320,19 @@ public class q2 {
                                 //If another point was found, keep the one with the smaller area.
                                 else {
                                     double areaPrevious = getArea(uPoint, vPoint, adjacentPointU);
-                                    double areaNew = getArea(uPoint, vPoint, adjacentPointV);
+                                    double areaNew = getArea(uPoint, vPoint, adjacentPointU);
+                                    if (areaNew < areaPrevious) {
+                                        adjacentPointU = potential;
+                                    }
+                                }
+                            }
+                            else if (side > 0) {
+                                if(adjacentPointV == null) {
+                                    adjacentPointV = potential;
+                                }
+                                else {
+                                    double areaPrevious = getArea(uPoint, vPoint, adjacentPointV);
+                                    double areaNew = getArea(uPoint, vPoint, potential);
                                     if (areaNew < areaPrevious) {
                                         adjacentPointV = potential;
                                     }
@@ -298,8 +340,50 @@ public class q2 {
                             }
                         }
 
-                        
+                        //Determine if quadrilateral is convex, if 2 valid points were found.
 
+                        if (!(adjacentPointU == null) && !(adjacentPointV == null)) {
+
+                            //Get all 4 angles
+
+                            //All angles.
+                            double uPoint_adjacentPointU_vPoint = getAngle(uPoint, adjacentPointU, vPoint);
+                            double adjacentPointU_vPoint_adjacentPointV = getAngle(adjacentPointU, vPoint, adjacentPointV);
+                            double vPoint_adjacentPointV_uPoint = getAngle(vPoint, adjacentPointV, uPoint);
+                            double adjacentPointV_uPoint_adjacentPointU = getAngle(adjacentPointV,uPoint, adjacentPointU);
+
+                            //Check if all angles are less than 180 to determine if convex.
+                            if (uPoint_adjacentPointU_vPoint < 180 & adjacentPointU_vPoint_adjacentPointV < 180) {
+                                if (vPoint_adjacentPointV_uPoint < 180 && adjacentPointV_uPoint_adjacentPointU < 180) {
+
+                                    //Check the opposite angles and if they are > 180, flip the edge.
+                                    if(uPoint_adjacentPointU_vPoint + vPoint_adjacentPointV_uPoint > 180) {
+                                        e.p = adjacentPointU;
+                                        e.q = adjacentPointV;
+
+                                        //Add new edge.
+                                        adjacentPointU.addEdge(e);
+                                        adjacentPointV.addEdge(e);
+
+                                        //Remove old edge.
+                                        if (uPoint.edges.contains(e)) {
+                                            uPoint.edges.remove(e);
+                                        }
+                                        if (vPoint.edges.contains(e)){
+                                            vPoint.edges.remove(e);
+                                        }
+
+                                        hasConverged = false;
+                                        incSumFlips();
+
+                                    }
+                                }
+                            }
+
+                        }
+                        //Unlock end points
+                        uPoint.unlock();
+                        vPoint.unlock();
                     }
 
 
