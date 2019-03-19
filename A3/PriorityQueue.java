@@ -1,5 +1,8 @@
 package A3;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicStampedReference;
+
 public class PriorityQueue {
 	int range;
 	Bucket[] bucket;
@@ -14,12 +17,17 @@ public class PriorityQueue {
 	public void add(QueueObject item, int key){
 		bucket[key].put(item);
 	}
+	
 	public QueueObject removeMin() {
+		QueueObject item = null;
 		for( int i = 0; i < range; i++){
-			QueueObject item = bucket[i].get();
-			if(item != null)
+			item = bucket[i].get();
+			if(item.threadId != -1)
 				return item;
 		}
-		return null;
+		return item;
 	}
+	
 }
+
+

@@ -2,29 +2,23 @@ package A3;
 
 public class LockBucket implements Bucket {
 
-	QueueObject head;
-	QueueObject tail;
-	QueueObject nullObject = new QueueObject('-',-1,-1);
+	QueueObject top = new QueueObject('t',-1,-1,-1);
 	
 	public LockBucket(){
-		this.head = nullObject;
-		this.tail = nullObject;
+		this.top.lockNext = null;
 	}
 	
 	@Override
 	public QueueObject get() {
-		synchronized(this.head){
-			if(head.threadId == -1){
-				return null;
+		QueueObject nullObject = new QueueObject('-',-1,-1,-1);
+		synchronized(top){
+			if(top.lockNext == null){
+				nullObject.actionTimeStamp = System.nanoTime();
+				return nullObject;
 			}else{
-				QueueObject item = head;
-				if(head.equals(tail)){
-					head = nullObject;
-					tail = nullObject;
-					
-				}else
-					head = head.next;
-				item.actionTimeStamp = System.currentTimeMillis() + "";
+				QueueObject item = top.lockNext;
+				top.lockNext = top.lockNext.lockNext;
+				item.actionTimeStamp = System.nanoTime();
 				return item;
 			}
 		}
@@ -32,15 +26,14 @@ public class LockBucket implements Bucket {
 
 	@Override
 	public void put(QueueObject item) {
-		synchronized(this.tail){
-			if(head.threadId == -1){
-				head = item;
-				tail = item;
+		synchronized(top){
+			if(top.lockNext == null){
+				top.lockNext = item;
 			}else{
-				tail.next = item;
-				tail = tail.next;
+				item.lockNext = top.lockNext;
+				top.lockNext = item;
 			}
-			item.actionTimeStamp = System.currentTimeMillis() + "";
+			item.actionTimeStamp = System.nanoTime();
 		}
 	}
 
