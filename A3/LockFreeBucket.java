@@ -20,11 +20,17 @@ public class LockFreeBucket implements Bucket{
 	public void put(QueueObject item) {
 		int i = 1;
 		while(true){
-			if(tryPut(item))
+			if(tryPut(item)){
+				item.actionTimeStamp = System.nanoTime();
 				return;
-			else
-				backoff(i);
-			i++;
+			}
+			else try {
+				QueueObject popObject = exchanger.exchange(item, MAX_BACKOFF, TimeUnit.SECONDS);
+				if(popObject == null){
+					item.actionTimeStamp = System.nanoTime();
+					return;
+				}
+			} catch(Exception e){}
 		}
 	}
 	
@@ -32,7 +38,6 @@ public class LockFreeBucket implements Bucket{
 		QueueObject oldTop = top.get();
 		item.lockFreeNext.set(oldTop);
 		boolean success = top.compareAndSet(oldTop, item);
-		item.actionTimeStamp = System.nanoTime();
 		return success;
 	}
 
@@ -44,10 +49,18 @@ public class LockFreeBucket implements Bucket{
 		do{
 			tryAgain[0] = false;
 			QueueObject returnObject = tryGet(tryAgain,nullObject);
-			if(returnObject.threadId != -1)
+			if(returnObject.threadId != -1){
+				returnObject.actionTimeStamp = System.nanoTime();
 				return returnObject;
-			else
-				backoff(i);
+			}
+			else try {
+				QueueObject pushObject = exchanger.exchange(null, MAX_BACKOFF, TimeUnit.SECONDS);
+				if(pushObject != null){
+					pushObject.actionTimeStamp = System.nanoTime();
+					return pushObject;
+				}
+			} catch(Exception e){}
+				
 		}while(tryAgain[0]);
 		return nullObject;
 	}
@@ -55,14 +68,12 @@ public class LockFreeBucket implements Bucket{
 	private QueueObject tryGet(boolean[] tryAgain, QueueObject nullObject) {
 		QueueObject oldTop = top.get();
 		if(oldTop == null){
-			nullObject.actionTimeStamp = System.nanoTime();
 			return nullObject;
 		}
 		
 		QueueObject newTop = oldTop.lockFreeNext.get();
 		
 		if(top.compareAndSet(oldTop, newTop)){
-			oldTop.actionTimeStamp = System.nanoTime();
 			return oldTop;
 		}else{
 			tryAgain[0] = true;
@@ -84,13 +95,13 @@ public class LockFreeBucket implements Bucket{
 		static final int EMPTY = 0, WAITING = 1, BUSY = 2;
 		AtomicStampedReference<QueueObject> slot = new AtomicStampedReference<QueueObject>(null,0);
 		
-		public QueueObject exchange(QueueObject item, long timeout, TimeUnit unit){
+		public QueueObject exchange(QueueObject item, long timeout, TimeUnit unit) throws Exception{
 			long nanos = unit.toNanos(timeout);
 			long timeBound = System.nanoTime() + nanos;
 			int[] stampHolder = {EMPTY};
 			while(true){
 				if(System.nanoTime() > timeBound)
-					return null;
+					throw new Exception();
 				QueueObject exchangeItem = slot.get(stampHolder);
 				int stamp = stampHolder[0];
 				
@@ -105,7 +116,7 @@ public class LockFreeBucket implements Bucket{
 							}
 						}
 						if(slot.compareAndSet(item, null, WAITING, EMPTY)){
-							return null;
+							throw new Exception();
 						}else{
 							exchangeItem = slot.get(stampHolder);
 							slot.set(null, EMPTY);
@@ -114,8 +125,9 @@ public class LockFreeBucket implements Bucket{
 					}
 					break;
 				case WAITING:
-					if(slot.compareAndSet(exchangeItem, item, WAITING, BUSY))
+					if(slot.compareAndSet(exchangeItem, item, WAITING, BUSY)){
 						return exchangeItem;
+					}
 					break;
 				case BUSY:
 					break;
