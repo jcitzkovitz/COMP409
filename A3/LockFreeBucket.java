@@ -9,14 +9,14 @@ import java.util.concurrent.atomic.AtomicStampedReference;
  * Lock-free bucket implementation
  * 
  * This implementation uses non-blocking techniques to ensure safe operations on a bucket,
- * including atomic CAS operations.
+ * making use of atomic CAS operations.
  * */
 public class LockFreeBucket implements Bucket{
 
 	AtomicReference<Node> top;
 	LockFreeExchanger exchanger;
 	final Random random;
-	final int TIMEOUT = 5;	// Milliseconds
+	final int TIMEOUT = 2;	// Milliseconds
 	
 	public LockFreeBucket(){
 		top =  new AtomicReference<Node>(null);
@@ -42,13 +42,14 @@ public class LockFreeBucket implements Bucket{
 				node.item.actionTimeStamp = System.nanoTime();
 				return;
 			}
+			
+			// Attempt to make an exchange with another thread
 			try {
-				System.out.println("try swap put");
 				QueueObject popObject = exchanger.exchange(item, TIMEOUT, TimeUnit.MILLISECONDS);
 				
 				// If the item this thread attempted pushed was retrieved succesfully, the push operation was succesfull
 				if(popObject == null){
-					System.out.println("SWAPPED WITH POP");
+					System.out.println("SWAPPED WITH GET");
 					node.item.actionTimeStamp = System.nanoTime();
 					return;
 				}
@@ -71,8 +72,7 @@ public class LockFreeBucket implements Bucket{
 	private boolean tryPut(Node node){
 		Node oldTop = top.get();
 		node.next = oldTop;
-		boolean success = top.compareAndSet(oldTop, node);
-		return success;
+		return top.compareAndSet(oldTop, node);
 	}
 
 	@Override
@@ -87,7 +87,6 @@ public class LockFreeBucket implements Bucket{
 		// Attempt to get the next item in the bucket until successful OR realize that the bucket is empty
 		// and leave the operation.
 		while(true){
-			
 			// First try getting the next item in the bucket. If the bucket is empty, leave the operation.
 			// If there is contention/another thread has modified the bucket, attempt to make an exchange
 			// with another thread.
@@ -102,8 +101,9 @@ public class LockFreeBucket implements Bucket{
 				nullObject.actionTimeStamp = System.nanoTime();
 				return nullObject;
 			}
+			
+			// Attempt to make an exchange with another thread 
 			try {
-				System.out.println("try swap get");
 				QueueObject pushObject = exchanger.exchange(null, TIMEOUT, TimeUnit.MILLISECONDS);
 				
 				// If this thread retrieved an item from another thread, then the exchange was successful
@@ -168,8 +168,8 @@ public class LockFreeBucket implements Bucket{
 		public QueueObject exchange(QueueObject item, long timeout, TimeUnit unit) throws TimeoutException{
 			
 			// Set the alloted waiting time and the initial stamp that a thread is trying to receive from to EMPTY
-			long nanos = unit.toNanos(timeout);
-			long timeBound = System.nanoTime() + nanos;
+			timeout = unit.toNanos(timeout);
+			long timeBound = System.nanoTime() + timeout;
 			int[] stampHolder = {EMPTY};
 			
 			// Attempt to make an exchange between multiple threads for a specified amount of time

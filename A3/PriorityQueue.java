@@ -1,8 +1,5 @@
 package A3;
 
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicStampedReference;
-
 /**
  * Priority Queue Class
  * 

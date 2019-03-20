@@ -4,7 +4,7 @@ package A3;
  * Lock bucket implementation
  * 
  * This implementation uses blocking techniques to ensure safe operations on a bucket
- * by allowing only one thread to enter the critical section at a time.
+ * by allowing only one thread to enter it at a time.
  * */
 public class LockBucket implements Bucket {
 
