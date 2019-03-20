@@ -2,24 +2,24 @@ package A3;
 
 public class LockBucket implements Bucket {
 
-	QueueObject top = new QueueObject('t',-1,-1,-1);
+	Node top = new Node(new QueueObject('t',-1,-1,-1));
 	
 	public LockBucket(){
-		this.top.lockNext = null;
+		this.top.next = null;
 	}
 	
 	@Override
 	public QueueObject get() {
 		QueueObject nullObject = new QueueObject('-',-1,-1,-1);
 		synchronized(top){
-			if(top.lockNext == null){
+			if(top.next == null){
 				nullObject.actionTimeStamp = System.nanoTime();
 				return nullObject;
 			}else{
-				QueueObject item = top.lockNext;
-				top.lockNext = top.lockNext.lockNext;
-				item.actionTimeStamp = System.nanoTime();
-				return item;
+				Node node = top.next;
+				top.next = top.next.next;
+				node.item.actionTimeStamp = System.nanoTime();
+				return node.item;
 			}
 		}
 	}
@@ -27,13 +27,14 @@ public class LockBucket implements Bucket {
 	@Override
 	public void put(QueueObject item) {
 		synchronized(top){
-			if(top.lockNext == null){
-				top.lockNext = item;
+			Node node = new Node(item);
+			if(top.next == null){
+				top.next = node;
 			}else{
-				item.lockNext = top.lockNext;
-				top.lockNext = item;
+				node.next = top.next;
+				top.next = node;
 			}
-			item.actionTimeStamp = System.nanoTime();
+			node.item.actionTimeStamp = System.nanoTime();
 		}
 	}
 

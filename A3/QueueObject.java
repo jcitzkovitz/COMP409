@@ -7,8 +7,6 @@ public class QueueObject {
 	int threadId;
 	int priority;
 	int deleted;	
-	QueueObject lockNext;
-	AtomicReference<QueueObject> lockFreeNext = new AtomicReference<QueueObject>();
 	long actionTimeStamp;
 	
 	public QueueObject(char c, int threadId, int priority, int deleted){
@@ -16,7 +14,6 @@ public class QueueObject {
 		this.threadId = threadId;
 		this.priority = priority;
 		this.deleted = deleted;
-		this.lockFreeNext.set(null);
 	}
 	
 	public boolean equals(QueueObject item){

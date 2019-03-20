@@ -58,8 +58,6 @@ class QueueManipulationThread implements Runnable {
 					item.c = c;
 					item.priority = p;
 					deleted[i] = null;
-					item.lockNext = null;
-					item.lockFreeNext.set(null);
 				}
 				
 				// Add item to queue

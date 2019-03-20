@@ -31,7 +31,7 @@ public class q1 {
 		n = Integer.parseInt(args[3]);
 		
 		// Initialize the Priority Queue
-		pQueue = new PriorityQueue(10,false);
+		pQueue = new PriorityQueue(10,true);
 		
 		// Create a thread pool of size t
 		ExecutorService executor = Executors.newFixedThreadPool(t);
@@ -65,7 +65,7 @@ public class q1 {
 				}
 			}
 			indexTracker[min]++;
-			System.out.println(threads[min].ops.get(indexTracker[min]-1));
+			System.out.println(i+": "+threads[min].ops.get(indexTracker[min]-1));
 		}
 	}
 	
