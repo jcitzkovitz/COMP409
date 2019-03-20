@@ -2,6 +2,9 @@ package A3;
 
 import java.util.ArrayList;
 
+/**
+ * Thread class that will randomly manipulate a Priority Queue
+ * */
 class QueueManipulationThread implements Runnable {
 	
 	int id;
@@ -30,10 +33,12 @@ class QueueManipulationThread implements Runnable {
 	public void run() {
 		int numOps = 0;
 		
+		// Randomly manipulate the priority queue until you have performed n operations.
 		while(numOps < n){
 			double prob = Math.random();
 			
-			if(prob < q){
+			// If prob is greater than q add an item to the priority q, and otherwise remove one.
+			if(prob > q){
 				
 				// Generate character between A and Z
 				char c = (char) ((65 + ((int)(26*Math.random()))%26));
@@ -51,8 +56,9 @@ class QueueManipulationThread implements Runnable {
 						break;
 					}
 				}
+				
 				if(createNew)
-					item = new QueueObject(c,this.id,p,0);
+					item = new QueueObject(c,this.id,p);
 				else {
 					item = deleted[i];
 					item.c = c;
@@ -77,7 +83,7 @@ class QueueManipulationThread implements Runnable {
 				// Update delete list
 				if(item.threadId != -1){
 					this.deleted[deletedIndex] = item;
-					this.updateDeletedIndex();
+					deletedIndex = (deletedIndex+1)%this.deletedSize;
 				}
 			}
 				
@@ -91,15 +97,18 @@ class QueueManipulationThread implements Runnable {
 		}
 	}
 	
-	private void updateDeletedIndex(){
-		deletedIndex = (deletedIndex+1)%this.deletedSize;
-	}
-	
+	/**
+	 * Update the list of operations done by a thread
+	 * 
+	 * @param op is the type of operation
+	 * @param item is the item that was operated on
+	 * */
 	private void updateOps(String op, QueueObject item){
 		String opString = "";
-		
 		opString = item.actionTimeStamp + " " + this.id + " " + op + " ";
+		
 		if(item.threadId == -1)
+			// The item is a null object (meanining that a remove occured on an empty stack)
 			opString+= "*";
 		else
 			opString+=item.threadId + "" + item.c + " " + item.priority;	

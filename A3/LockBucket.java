@@ -1,16 +1,37 @@
 package A3;
 
+/**
+ * Lock bucket implementation
+ * 
+ * This implementation uses blocking techniques to ensure safe operations on a bucket
+ * by allowing only one thread to enter the critical section at a time.
+ * */
 public class LockBucket implements Bucket {
 
-	Node top = new Node(new QueueObject('t',-1,-1,-1));
+	
+	Node top;
 	
 	public LockBucket(){
+		
+		// Set the top node pointer to be a physical node that does not change. 
+		// The top node object will be synchronized on, and its next pointer 
+		// will act as the main top pointer.
+		top = new Node(new QueueObject('t',-1,-1));
 		this.top.next = null;
 	}
 	
 	@Override
+	/**
+	 * Get next item in the bucket
+	 * 
+	 * @return the next item in the bucket
+	 * */
 	public QueueObject get() {
-		QueueObject nullObject = new QueueObject('-',-1,-1,-1);
+		QueueObject nullObject = new QueueObject('-',-1,-1);
+		
+		// When a thread gets the lock, check if the bucket is empty. If yes, then
+		// return a null node, otherwise return the next node and change the top
+		// of the bucket to its successor.
 		synchronized(top){
 			if(top.next == null){
 				nullObject.actionTimeStamp = System.nanoTime();
@@ -25,15 +46,16 @@ public class LockBucket implements Bucket {
 	}
 
 	@Override
+	/**
+	 * Put an item into the bucket
+	 * */
 	public void put(QueueObject item) {
+		// When a thread gets the lock, change the top pointer to be the given item and its
+		// next pointer to the previous top item.
 		synchronized(top){
 			Node node = new Node(item);
-			if(top.next == null){
-				top.next = node;
-			}else{
-				node.next = top.next;
-				top.next = node;
-			}
+			node.next = top.next;
+			top.next = node;
 			node.item.actionTimeStamp = System.nanoTime();
 		}
 	}
