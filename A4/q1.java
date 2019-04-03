@@ -13,7 +13,7 @@ public class q1 {
 	static int numNodes;
 	static int numThreads;
 	
-	volatile static int numNodesAdded;
+	volatile static Integer numNodesAdded = 0;
 	volatile static int numTasksProcessed; 
 	volatile static boolean maxNodesAdded;
 	
@@ -58,15 +58,15 @@ public class q1 {
 		System.out.println("Tasks Processed: " + numTasksProcessed);
 	}
 	
-	static synchronized boolean updateNodesAdded() {
-		if(numNodesAdded != numNodes) {
-			numNodesAdded++;
-			return true;
-		} else {
-			maxNodesAdded = true;
-			return false;
-		}
-	}
+//	static synchronized boolean updateNodesAdded() {
+//		if(numNodesAdded != numNodes) {
+//			numNodesAdded++;
+//			return true;
+//		} else {
+//			maxNodesAdded = true;
+//			return false;
+//		}
+//	}
 	
 	static synchronized void updateTasksProcessed() {
 		numTasksProcessed++;
@@ -134,11 +134,16 @@ public class q1 {
 					}
 				}
 				
-				if(updateNodesAdded()){
-					fromNode.edges.add(toNode);
-					return ADDED;
-				} else
-					return NOT_ADDED;
+				synchronized(numNodesAdded) {
+					numNodesAdded++;
+					if(numNodesAdded <= numNodes) {
+						fromNode.edges.add(toNode);
+						return ADDED;
+					} else {
+						maxNodesAdded = true;
+						return NOT_ADDED;
+					}
+				}
 		}
 		
 		private boolean withinRadius(Node n1, Node n2) {
