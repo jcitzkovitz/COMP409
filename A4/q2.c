@@ -21,7 +21,7 @@ int main(int argc,char *argv[]) {
     omp_set_num_threads(t+1);
 
     // Generate a random text
-    int textLength = 100;
+    float textLength = 100;
     char *text = (char *) malloc(sizeof(char)*textLength);
     srand(time(NULL));
     for(int i = 0; i < textLength; i++) {
@@ -32,6 +32,7 @@ int main(int argc,char *argv[]) {
 
     // Get evenly-sized sections for each thread to work on
     int workingLength = ceil(textLength/(t+1));
+    printf("Working length: %d\n",workingLength);
 
     // Create two shared variables, one that will tell a thread
     // that the previous one knows its final state and one that
@@ -42,41 +43,42 @@ int main(int argc,char *argv[]) {
     
     #pragma omp parallel for
     for (int i=0;i<t+1;i++) {
+        int localWorkingLength = workingLength;
         if(i == 0) {
-            char *fill = (char *) malloc(sizeof(char)*workingLength);
-            int *nextState = setNextState(state, 0, workingLength, text, fill);
+            char *fill = (char *) malloc(sizeof(char)*localWorkingLength);
+            int *nextState = setNextState(state, 0, localWorkingLength, text, fill);
             startErase = *(nextState+1);
             state = *nextState;
-            for(int j = 0; j < workingLength; j++)
+            for(int j = 0; j < localWorkingLength; j++)
                 text[j] = fill[j];
             printf("Iteration %d done by thread %d with end state %d with erase index %d\n",
                i,
                omp_get_thread_num(),state,startErase);
-            for(int j = 0; j < workingLength; j++) {
+            for(int j = 0; j < localWorkingLength; j++) {
                 printf("%c",text[j]);
             }
             printf("!\n");
             turn = 1;
         } else {
 
-            int startIndex = i*workingLength;
+            int startIndex = i*localWorkingLength;
             
             if(i == t) {
-                workingLength = textLength - i*workingLength;
+                localWorkingLength = textLength - i*localWorkingLength;
             }
             
 
-            char *startStateFill1 = (char *) malloc(sizeof(char)*workingLength);
-            char *startStateFill2 = (char *) malloc(sizeof(char)*workingLength);
-            char *startStateFill3 = (char *) malloc(sizeof(char)*workingLength);
-            char *startStateFill4 = (char *) malloc(sizeof(char)*workingLength);
-            char *startStateFill5 = (char *) malloc(sizeof(char)*workingLength);
+            char *startStateFill1 = (char *) malloc(sizeof(char)*localWorkingLength);
+            char *startStateFill2 = (char *) malloc(sizeof(char)*localWorkingLength);
+            char *startStateFill3 = (char *) malloc(sizeof(char)*localWorkingLength);
+            char *startStateFill4 = (char *) malloc(sizeof(char)*localWorkingLength);
+            char *startStateFill5 = (char *) malloc(sizeof(char)*localWorkingLength);
 
-            int *startState1 = setNextState(STATE1, startIndex, startIndex + workingLength, text, startStateFill1);
-            int *startState2 = setNextState(STATE2, startIndex, startIndex + workingLength, text, startStateFill2);
-            int *startState3 = setNextState(STATE3, startIndex, startIndex + workingLength, text, startStateFill3);
-            int *startState4 = setNextState(STATE4, startIndex, startIndex + workingLength, text, startStateFill4);
-            int *startState5 = setNextState(STATE5, startIndex, startIndex + workingLength, text, startStateFill5);
+            int *startState1 = setNextState(STATE1, startIndex, startIndex + localWorkingLength, text, startStateFill1);
+            int *startState2 = setNextState(STATE2, startIndex, startIndex + localWorkingLength, text, startStateFill2);
+            int *startState3 = setNextState(STATE3, startIndex, startIndex + localWorkingLength, text, startStateFill3);
+            int *startState4 = setNextState(STATE4, startIndex, startIndex + localWorkingLength, text, startStateFill4);
+            int *startState5 = setNextState(STATE5, startIndex, startIndex + localWorkingLength, text, startStateFill5);
 
             while(turn != i);
 
@@ -94,14 +96,14 @@ int main(int argc,char *argv[]) {
 
             printf("Iteration %d done by thread %d on size %d at index %d to index %d with chosen state %d with prevEraseIndex %d\n",
                i,
-               omp_get_thread_num(),workingLength, startIndex, startIndex+workingLength,state,prevStartErase);
+               omp_get_thread_num(),localWorkingLength, startIndex, startIndex+localWorkingLength,state,prevStartErase);
 
             if(fill[0] == ' ') {
                 for(int j = prevStartErase; j < startIndex; j++)
                     text[j] = ' ';
             }
             
-            for(int j = 0; j < workingLength; j++) {
+            for(int j = 0; j < localWorkingLength; j++) {
                 text[startIndex+j] = fill[j];
             }
 
@@ -110,7 +112,7 @@ int main(int argc,char *argv[]) {
                     text[j] = ' ';
             }
 
-            for(int j = 0; j < startIndex+workingLength; j++) {
+            for(int j = 0; j < startIndex+localWorkingLength; j++) {
                 char c;
                 if(j >= startIndex) {
                     c = text[j];
@@ -133,6 +135,7 @@ int *setNextState(int startState, int startIndex, int endIndex, char text[], cha
     int currentState = startState;
     int eraseIndexEnd = -1;
     int eraseIndexStart = 0;
+    int returnEraseIndexStart = -1;
 
     for(int i = startIndex; i < endIndex; i++) {
         // printf("CurState: %d, CurChar: %c\n",currentState,text[i]);
@@ -200,9 +203,13 @@ int *setNextState(int startState, int startIndex, int endIndex, char text[], cha
                 }
                 break;
             case STATE5 :
+                if(returnEraseIndexStart == -1) {
+                    returnEraseIndexStart = eraseIndexStart;
+                }
                 if(text[i] >= 48 && text[i] <= 57) {
                     fill[i-startIndex] = text[i];
                     currentState = STATE5;
+                    returnEraseIndexStart++;
                     // printf("Go to STATE5\n");
                 }
                 else {
@@ -214,6 +221,7 @@ int *setNextState(int startState, int startIndex, int endIndex, char text[], cha
                         eraseIndexEnd = -1;
                     }
                     eraseIndexStart = i-startIndex+1;
+                    returnEraseIndexStart = eraseIndexStart;
                     fill[i-startIndex] = ' ';
                     currentState = STATE1;
                     // printf("Go to STATE1\n");
@@ -230,6 +238,6 @@ int *setNextState(int startState, int startIndex, int endIndex, char text[], cha
 
     int *returnArray = malloc(sizeof(int)*2);
     *(returnArray) = currentState;
-    *(returnArray+1) = eraseIndexStart;
+    *(returnArray+1) = returnEraseIndexStart;
     return returnArray;
 }
