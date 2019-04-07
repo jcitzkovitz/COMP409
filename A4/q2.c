@@ -135,7 +135,7 @@ int *setNextState(int startState, int startIndex, int endIndex, char text[], cha
     int currentState = startState;
     int eraseIndexEnd = -1;
     int eraseIndexStart = 0;
-    int returnEraseIndexStart = -1;
+    int returnEraseIndexStart = 0;
 
     for(int i = startIndex; i < endIndex; i++) {
         // printf("CurState: %d, CurChar: %c\n",currentState,text[i]);
@@ -203,13 +203,10 @@ int *setNextState(int startState, int startIndex, int endIndex, char text[], cha
                 }
                 break;
             case STATE5 :
-                if(returnEraseIndexStart == -1) {
-                    returnEraseIndexStart = eraseIndexStart;
-                }
+                returnEraseIndexStart = i-startIndex+1;
                 if(text[i] >= 48 && text[i] <= 57) {
                     fill[i-startIndex] = text[i];
                     currentState = STATE5;
-                    returnEraseIndexStart++;
                     // printf("Go to STATE5\n");
                 }
                 else {
@@ -221,7 +218,6 @@ int *setNextState(int startState, int startIndex, int endIndex, char text[], cha
                         eraseIndexEnd = -1;
                     }
                     eraseIndexStart = i-startIndex+1;
-                    returnEraseIndexStart = eraseIndexStart;
                     fill[i-startIndex] = ' ';
                     currentState = STATE1;
                     // printf("Go to STATE1\n");
