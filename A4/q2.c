@@ -6,6 +6,7 @@
 int setNextState(int startState, int startIndex, int endIndex, char text[], char keepText[]);
 void modifyString(char text[], char keepText[], int textLength);
 void cleanKeepText(char keepText[], int textLength);
+void checkStep3SpecialCase(char keepText[], int prevStartState, int startIndex);
 
 const char charSet[12] = {'0','1','2','3','4','5','6','7','8','9','.','a'};
 #define STATE1 0
@@ -42,6 +43,8 @@ int main(int argc,char *argv[]) {
     int state = STATE1;
 
     char *keepText = malloc(sizeof(char)*textLength);
+    for(int i = 0; i < textLength; i++)
+        keepText[i] = '-';
     
     #pragma omp parallel for
     for (int i=0;i<t+1;i++) {
@@ -83,6 +86,8 @@ int main(int argc,char *argv[]) {
                i,
                omp_get_thread_num(),localWorkingLength, startIndex, startIndex+localWorkingLength-1,state);
 
+            int prevStartState = state;
+
             char *fill;
             switch(state) {
                 case STATE1 : fill = startStateFill1; state = startState1; break;
@@ -96,6 +101,11 @@ int main(int argc,char *argv[]) {
             for(int j = 0; j < localWorkingLength; j++) {
                 keepText[startIndex+j] = fill[j];
             }
+
+            // Check special case where STATE3 was passed to the current iteration and the start index does not store a period.
+            // This raises an issue as if this index does not hold a period, the current value must be reconsidered, but the
+            // previous '0' character must be removed.
+            checkStep3SpecialCase(keepText,prevStartState,startIndex);
             
             turn = i+1;
         }
@@ -113,6 +123,12 @@ int main(int argc,char *argv[]) {
 
 }
 
+void checkStep3SpecialCase(char keepText[], int prevStartState, int startIndex) {
+    if(prevStartState == STATE3 && keepText[startIndex] != '.') {
+        keepText[startIndex-1] = 'S';
+    }
+}
+
 void modifyString(char text[], char keepText[], int textLength) {
 
     // Clean keeptText array
@@ -123,10 +139,8 @@ void modifyString(char text[], char keepText[], int textLength) {
     for(int i = 0; i < textLength; i++) {
         if(keepText[i] == 'S') {
             firstS = 1;
-            printf("Found s\n");
             break;
         } else if(keepText[i] == 'E') {
-            printf("Found e\n");
             break;
         }
     }
@@ -214,9 +228,6 @@ int setNextState(int startState, int startIndex, int endIndex, char text[], char
     int curStartKeep = 0;
     int curEndKeep = 0;
 
-    for(int i = startIndex; i < endIndex; i++)
-        keepText[i-startIndex] = '-';
-
     for(int i = startIndex; i < endIndex; i++) {
         switch(currentState) {
             case STATE1 :
@@ -247,8 +258,10 @@ int setNextState(int startState, int startIndex, int endIndex, char text[], char
                     currentState = STATE4;
                 }
                 else {
-                    i--;
-                    keepText[i-startIndex] = 'S';
+                    if(i != 0) {
+                        i--;
+                        keepText[i-startIndex] = 'S';
+                    }
                     currentState = STATE1;
                 }
                 break;
