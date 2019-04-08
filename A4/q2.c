@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
+#include <sys/time.h>
 
 int setNextState(int startState, int startIndex, int endIndex, char text[], char keepText[]);
 void modifyString(char text[], char keepText[], int textLength);
@@ -24,7 +26,10 @@ int main(int argc,char *argv[]) {
     omp_set_num_threads(t+1);
 
     // Generate a random text.
-    float textLength = 100;
+
+    // A text length of 70000000 takes around 500 ms to perform with 0 optimistic threads, but alot easier to see correct results
+    // on strings of less than 200.
+    double textLength = 100;
     char *text = (char *) malloc(sizeof(char)*textLength);
     srand(time(NULL));
     for(int i = 0; i < textLength; i++) {
@@ -50,6 +55,10 @@ int main(int argc,char *argv[]) {
     char *keepText = malloc(sizeof(char)*textLength);
     for(int i = 0; i < textLength; i++)
         keepText[i] = '-';
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
     
     // Split the computation amongst the state number of threads.
     // Each thread, besides the first, will compute the next state
@@ -132,6 +141,12 @@ int main(int argc,char *argv[]) {
             turn = i+1;
         }
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    uint64_t delta_us = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
+
+    // Uncomment the line below to see timing results.
+    // printf("\nTime Elapsed: %lu\n", delta_us);
 
     // Modify the string accordingly based on the keepText arrays information.
     modifyString(text,keepText,textLength);
