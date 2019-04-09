@@ -20,11 +20,6 @@ public class q1 {
 	static AtomicInteger numTasksProcessed = new AtomicInteger(0); 
 	volatile static boolean maxNodesAdded;
 	
-	// Different states of a completed task.
-	static final int ADDED = 0;
-	static final int NOT_ADDED = 1;
-	static final int FULL = 2;
-	
 	static Board board = new Board();
 	
 	public static void main(String[] args) {
@@ -80,30 +75,37 @@ public class q1 {
 
 		@Override
 		public void run() {
-			// If the executor is shutoff/the maximum number of nodes have been created, attempting
-			// to execute a new task will throw an error. Catch the error and run no more tasks.
+			
 			try {
 				
-				// Generate new node.
-				Node newNode = new Node(Math.random(),Math.random());
+				try {
+					// Attempt to add the new node stemming from the current node.
+					Node newNode = board.addNode(this.node, Math.random(), Math.random());
+					
+					// The newNode will be null if the total number of added nodes has reached its max.
+					// If the node was added successfully, continue growing this node and start growing the new node.
+					if(newNode != null) {
+						this.executor.execute(new Task(newNode,this.executor));
+						this.executor.execute(new Task(this.node,this.executor));
+					}
+				}
 				
-				// Attempt to add the new node stemming from the current node.
-				int addResult = board.addNode(this.node, newNode);
-				
-				// If the node was successfully added, generate a task for the newly created node.
-				if(addResult == ADDED) {
-					this.executor.execute(new Task(newNode,this.executor));
-				} 
-				
-				// If the current node is not full, generate a new task and continue growing this node.
-				if (addResult != FULL) {
+				// If the current node is not full but couldnt successfully add a node, generate a new task and continue growing this node.
+				catch(NotAddedException nae) { 
 					this.executor.execute(new Task(this.node,this.executor));
-				} 
+				}
 				
-				// Increment the number of tasks processed as this task is not finished.
-				numTasksProcessed.incrementAndGet();
+				// If the current node is full let the task end.
+				catch(FullException fe) {}
 				
-			} catch(RejectedExecutionException e) {}
+				finally {
+					// Increment the number of tasks processed as this task is now finished.
+					numTasksProcessed.incrementAndGet();
+				}
+				
+			} 
+			// If the executor has been shut down let the task end.
+			catch(RejectedExecutionException e) {}
 		}
 		
 	}
@@ -115,7 +117,6 @@ public class q1 {
 	 * */
 	static class Board {
 		Obstacle[] obstacles = new Obstacle[20];
-		ArrayList<Node> nodes = new ArrayList<Node>();
 		
 		public Board() {
 			generateObstacles();
@@ -136,25 +137,27 @@ public class q1 {
 		 * 
 		 * @param fromNode is the node that this function attempts to grow from.
 		 * @param toNode is the node that this function is attempting to add to fromNode.
+		 * @throws NotAddedException 
+		 * @throws FullException 
 		 * */
-		public int addNode(Node fromNode, Node toNode) {
+		public Node addNode(Node fromNode, double toNodeX, double toNodeY) throws NotAddedException, FullException {
 			
 				// If the number of edges stemming from fromNode is at its capacity, tell the 
 				// calling function that this node is full.
 				if(fromNode.edges.size() == maxEdges)
-					return FULL;
+					throw new FullException();
 				
 				// If the generated node does not fall within the radius limit, tell the calling
 				// function that it was not able to be added.
-				if(!withinRadius(fromNode,toNode)){
-					return NOT_ADDED;
+				if(!withinRadius(fromNode,toNodeX,toNodeY)){
+					throw new NotAddedException();
 				}
 				
 				// If the generated node interferes with an obstacle on the board OR the edge intersects
 				// the board, tell the calling function that it was not able to be added.
 				for(Obstacle obstacle : obstacles) {
-					if(obstacle.intersects(fromNode, toNode)){
-						return NOT_ADDED;
+					if(obstacle.intersects(fromNode, toNodeX,toNodeY)){
+						throw new NotAddedException();
 					}
 				}
 				
@@ -162,19 +165,20 @@ public class q1 {
 				// Otherwise, tell the calling function that it could not be added and send a signal to shut
 				// down execution as we have reached the required number of nodes created on the board.
 				if(numNodesAdded.incrementAndGet() <= numNodes) {
+					Node toNode = new Node(toNodeX, toNodeY);
 					fromNode.edges.add(toNode);
-					return ADDED;
+					return toNode;
 				} else {
 					maxNodesAdded = true;
-					return NOT_ADDED;
+					return null;
 				}
 		}
 		
 		/**
 		 * Function for checking whether the edge between two nodes is within the radius limit.
 		 * */
-		private boolean withinRadius(Node n1, Node n2) {
-			double distance = Math.sqrt(Math.pow(n1.y-n2.y, 2) + Math.pow(n1.x-n2.x, 2));
+		private boolean withinRadius(Node n1, double n2x, double n2y) {
+			double distance = Math.sqrt(Math.pow(n1.y-n2y, 2) + Math.pow(n1.x-n2x, 2));
 			return distance <= maxRadius;
 		}
 	}
@@ -216,20 +220,20 @@ public class q1 {
 		 * @param n1 is one node.
 		 * @param n2 is the second node.
 		 * */
-		public boolean intersects(Node n1, Node n2) {
+		public boolean intersects(Node n1, double n2x, double n2y) {
 			
 			// If the two nodes are vertically or horizontally aligned, avoid division by zero errors with equation calculations 
 			// and check whether they are not intersecting with this object.
-			if(n1.x == n2.x){
-				if(n1.x >= this.left && n1.x <= this.right && ((n1.y > this.top && n2.y <= this.top) || (n1.y < this.bottom && n2.y >= this.bottom)))
+			if(n1.x == n2x){
+				if(n1.x >= this.left && n1.x <= this.right && ((n1.y > this.top && n2y <= this.top) || (n1.y < this.bottom && n2y >= this.bottom)))
 					return true;
-			} else if(n1.y == n2.y) {
-				if(n1.y >= this.bottom && n1.y <= this.top && ((n1.x < this.left && n2.x >= this.left) || (n1.x > this.right && n2.x <= this.right)))
+			} else if(n1.y == n2y) {
+				if(n1.y >= this.bottom && n1.y <= this.top && ((n1.x < this.left && n2x >= this.left) || (n1.x > this.right && n2x <= this.right)))
 					return true;
 			} else {
 				
 				// Get the equation of the line formulated by connecting nodes 1 and 2.
-				double slope = (n1.y - n2.y)/(n1.x - n2.x);
+				double slope = (n1.y - n2y)/(n1.x - n2x);
 				double yIntersect = n1.y - slope*n1.x;
 				double yLeft = slope*this.left + yIntersect;
 				double yRight = slope*this.right + yIntersect;
@@ -237,15 +241,15 @@ public class q1 {
 				double xBottom = (this.bottom-yIntersect)/slope;
 				
 				// Check left/right
-				if((yLeft >= this.bottom && yLeft <= this.top) && (n1.x < this.left && n2.x >= this.left)) {
+				if((yLeft >= this.bottom && yLeft <= this.top) && (n1.x < this.left && n2x >= this.left)) {
 					return true;
-				} else if((yRight >= this.bottom && yRight <= this.top) && (n1.x > this.right && n2.x <= this.right))
+				} else if((yRight >= this.bottom && yRight <= this.top) && (n1.x > this.right && n2x <= this.right))
 					return true;
 				
 				// Check top/bottom
-				if((xTop >= this.left && xTop <= this.right) && (n1.y > this.top && n2.y <= this.top)) {
+				if((xTop >= this.left && xTop <= this.right) && (n1.y > this.top && n2y <= this.top)) {
 						return true;
-				} else if((xBottom >= this.left && xBottom <= this.right) && (n1.y < this.bottom && n2.y >= this.bottom)){
+				} else if((xBottom >= this.left && xBottom <= this.right) && (n1.y < this.bottom && n2y >= this.bottom)){
 					return true;
 				}
 			}
@@ -254,4 +258,10 @@ public class q1 {
 			return false;
 		}
 	}
+	
+	// Exception for when the node is full.
+	static class FullException extends Exception {}
+	
+	// Eception for when a new node could not be added to a nodes edges.
+	static class NotAddedException extends Exception {}
 }
